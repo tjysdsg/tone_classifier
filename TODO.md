@@ -1,0 +1,2 @@
+- Speed perturb
+- Window size/amount of adjacent frames to add
