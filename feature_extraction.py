@@ -38,14 +38,12 @@ def melspectrogram_feature(audio_path, save_path, fmin=50, fmax=350):
     plt.gca().yaxis.set_major_locator(plt.NullLocator()) 
     plt.subplots_adjust(top=1, bottom=0, left=0, right=1, hspace=0, wspace=0) 
     plt.margins(0, 0)
-    name = os.path.basename(audio_path).split('.')[0] + '.jpg'
-    plt.savefig(os.path.join(save_path, name))
+    plt.savefig(save_path)
     plt.close('all')
-
-    return os.path.join(save_path, name)
 
 
 if __name__ == "__main__":
+    """
     # SSB utterance id to aishell2 utterance id
     ssb2utt = {}
     with open('ssbutt.txt') as f:
@@ -118,8 +116,10 @@ if __name__ == "__main__":
             align[tone].append([k, p, v[i][0], v[i][1]])
         
     json.dump(align, open('align.json', 'w'))
-
     """
+
+#     """
+    n_samples = 50000
     align = json.load(open('align.json'))
     align = {int(k): v for k,v in align.items()}
 
@@ -131,11 +131,16 @@ if __name__ == "__main__":
 
         n = len(align[i])
         for j, e in enumerate(align[i]):
+            if j >= n_samples:
+                break
             print(f'tone {i}: {j}/{n}', end='\r')
             filename, phone, start, dur = e
             spk = filename[1:6]
 
             wavpath = pjoin(aligndir, f"{j}_{filename}_{phone}.wav")
+            outpath = pjoin(outdir, f"{j}_{filename}_{phone}.jpg")
+            if os.path.exists(outpath):
+                continue
             time_range_to_file(pjoin(data_root, spk, f'{filename}.wav'), wavpath, start, dur)
-            melspectrogram_feature(wavpath, outdir)
-    """
+            melspectrogram_feature(wavpath, outpath)
+#     """

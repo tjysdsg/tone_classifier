@@ -1,6 +1,7 @@
 from PIL import Image
 from utils import preprocess_input
 import numpy as np
+from sklearn.model_selection import train_test_split
 from sklearn import metrics
 from keras.utils import np_utils
 from keras.callbacks import ModelCheckpoint
@@ -11,18 +12,15 @@ from keras.optimizers import SGD
 from keras.models import load_model
 
 
-def get_data(data_path_file):
-    with open(data_path_file, 'r', encoding='utf-8') as f:
-        data = f.readlines()
-
+def get_data():
     content = []
     label = []
-    for d in data:
-        tmp = d.split('\t')
-        im = Image.open(tmp[0])
-        x = preprocess_input(np.array(im, dtype='float32'))
-        content.append(x)
-        label.append(int(tmp[-1].strip().strip('\n')) - 1)
+    for i in range(5):
+        for f in os.walkdir(os.path.join('feats', f'{i}')):
+            im = Image.open(f)
+            x = preprocess_input(np.array(im, dtype='float32'))
+            content.append(x)
+            label.append(i)
     return np.array(content), label
 
 
@@ -107,14 +105,14 @@ def create_model(width, height, channels, activation):
     model.add(BatchNormalization())
     model.add(Activation(activation))
 
-    model.add(Dense(4))  
+    model.add(Dense(5))  
     model.add(Activation('softmax'))  
     return model
 
 
 def train_tonenet(train_data, train_label, test_data, test_label, width, height, channels, lr, activation, epochs, batch_size):
-    train_label = np_utils.to_categorical(train_label, num_classes=4)
-    test_label = np_utils.to_categorical(test_label, num_classes=4)
+    train_label = np_utils.to_categorical(train_label, num_classes=5)
+    test_label = np_utils.to_categorical(test_label, num_classes=5)
 
     model = create_model(width, height, channels, activation)
     sgd = SGD(lr=lr, momentum=0.9, nesterov=True)
@@ -131,20 +129,18 @@ def train_tonenet(train_data, train_label, test_data, test_label, width, height,
         batch_size=batch_size,
         callbacks=[checkpoint_callback],
     ) 
-    
+
     print("Testing ===========================")
     loss, accuracy = model.evaluate(test_data, test_label)
     print("loss:", loss)
     print("Test:", accuracy)
 
 
-def predict(model, file_path):
+def predict(model, test_data, test_label):
     model = load_model(model)
     
-    test_data,test_label = get_data(file_path)
-
     output_o = model.predict(test_data, batch_size=len(test_data))
-    output = np.argmax(output_o,axis=1)
+    output = np.argmax(output_o, axis=1)
 
     confusion_matrix = metrics.confusion_matrix(test_label, output)
     accuracy = metrics.accuracy_score(test_label, output)
@@ -159,8 +155,8 @@ def predict(model, file_path):
 
 
 def train():
-    train_data, train_label = get_data('train')
-    test_data, test_label = get_data('test')
+    X, y = get_data()
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
     width = 225
     height = 225
     channels = 3
@@ -168,4 +164,4 @@ def train():
     activation = 'relu'
     epochs = 50
     batch_size = 128
-    train_tonenet(train_data, train_label, test_data, test_label, width, height, channels, lr, activation, epochs, batch_size)
+    train_tonenet(X_train, y_train, X_test, y_test, width, height, channels, lr, activation, epochs, batch_size)
