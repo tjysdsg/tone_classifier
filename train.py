@@ -1,27 +1,52 @@
 from PIL import Image
 from utils import preprocess_input
 import numpy as np
+import os
+import math
 from sklearn.model_selection import train_test_split
 from sklearn import metrics
-from keras.utils import np_utils
-from keras.callbacks import ModelCheckpoint
-from keras.models import Sequential
-from keras.layers import Conv2D, Activation, MaxPool2D,Flatten, Dense
-from keras.layers.normalization import BatchNormalization
-from keras.optimizers import SGD
-from keras.models import load_model
+import tensorflow as tf
+from tensorflow.keras.utils import to_categorical, Sequence
+from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Conv2D, Activation, MaxPool2D,Flatten, Dense, BatchNormalization
+from tensorflow.keras.optimizers import SGD
+from tensorflow.keras.models import load_model
 
 
 def get_data():
     content = []
     label = []
     for i in range(5):
-        for f in os.walkdir(os.path.join('feats', f'{i}')):
-            im = Image.open(f)
-            x = preprocess_input(np.array(im, dtype='float32'))
-            content.append(x)
-            label.append(i)
-    return np.array(content), label
+        datadir = os.path.join('feats', f'{i}')
+        for f in os.scandir(datadir):
+            if f.is_file() and '.jpg' in f.name:
+                content.append(f.path)
+                label.append(i)
+    label = to_categorical(label, num_classes=5)
+    ret = list(zip(content, label))
+    return ret
+
+
+class ImageLoader(Sequence):
+    def __init__(self, data, batch_size):
+        self.data = data
+        self.batch_size = batch_size
+        self.n = math.ceil(len(self.data) / self.batch_size)
+
+    def __len__(self):
+        return self.n
+
+    def __getitem__(self, idx):
+        batch = self.data[idx * self.batch_size:(idx + 1) * self.batch_size]
+
+        def read_img(b):
+            img = np.asarray(Image.open(b), dtype='float32')
+            return preprocess_input(img)
+
+        x = np.asarray([read_img(b[0]) for b in batch])
+        y = np.asarray([b[1] for b in batch], dtype='float32')
+        return x, y
 
 
 def create_model(width, height, channels, activation):
@@ -110,35 +135,34 @@ def create_model(width, height, channels, activation):
     return model
 
 
-def train_tonenet(train_data, train_label, test_data, test_label, width, height, channels, lr, activation, epochs, batch_size):
-    train_label = np_utils.to_categorical(train_label, num_classes=5)
-    test_label = np_utils.to_categorical(test_label, num_classes=5)
-
+def train_tonenet(train_loader, test_loader, val_loader, width, height, channels, lr, activation, epochs):
     model = create_model(width, height, channels, activation)
     sgd = SGD(lr=lr, momentum=0.9, nesterov=True)
     model.compile(optimizer=sgd, loss='categorical_crossentropy', metrics=['accuracy'])
 
-    print("training ==========================")
+    print("====================== training ==========================")
     checkpoint_callback = ModelCheckpoint(filepath="ToneNet.hdf5", verbose=1, save_best_only=True)
+    earlystopping = EarlyStopping(monitor='val_loss', patience=5, verbose=1, mode='min')
     model.fit(
-        train_data, train_label,
-        validation_split=0.1,
-        shuffle=True,
+        train_loader,
         epochs=epochs,
+        validation_data=val_loader,
         verbose=1,
-        batch_size=batch_size,
-        callbacks=[checkpoint_callback],
-    ) 
+        workers=2,
+        shuffle=False,
+        use_multiprocessing=True,
+        callbacks=[checkpoint_callback, earlystopping],
+    )
 
-    print("Testing ===========================")
-    loss, accuracy = model.evaluate(test_data, test_label)
+    print("====================== Testing ===========================")
+    loss, accuracy = model.evaluate(test_loader)
     print("loss:", loss)
     print("Test:", accuracy)
 
 
 def predict(model, test_data, test_label):
     model = load_model(model)
-    
+
     output_o = model.predict(test_data, batch_size=len(test_data))
     output = np.argmax(output_o, axis=1)
 
@@ -155,8 +179,6 @@ def predict(model, test_data, test_label):
 
 
 def train():
-    X, y = get_data()
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
     width = 225
     height = 225
     channels = 3
@@ -164,4 +186,18 @@ def train():
     activation = 'relu'
     epochs = 50
     batch_size = 128
-    train_tonenet(X_train, y_train, X_test, y_test, width, height, channels, lr, activation, epochs, batch_size)
+
+    data = get_data()
+    train, test = train_test_split(data, test_size=0.3, shuffle=True)
+    train, val = train_test_split(train, test_size=0.1, shuffle=True)
+
+    train_tonenet(
+        ImageLoader(train, batch_size),
+        ImageLoader(test, batch_size),
+        ImageLoader(val, batch_size),
+        width, height, channels, lr, activation, epochs
+    )
+
+
+if __name__ == "__main__":
+    train()
