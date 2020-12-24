@@ -44,13 +44,20 @@ def melspectrogram_feature(audio_path, save_path, fmin=50, fmax=350):
 
 
 if __name__ == "__main__":
-#     """
+    """
     # SSB utterance id to aishell2 utterance id
     ssb2utt = {}
     with open('ssbutt.txt') as f:
         for line in f:
             utt, ssb = line.replace('\n', '').split('|')
             ssb2utt[ssb] = utt
+
+    # utt of filtered wavs
+    filtered_wavs = set()
+    with open('wav_filtered.scp') as f:
+        for line in f:
+            utt = line.split('\t')[0]
+            filtered_wavs.add(utt)
 
     # utt to its phone-level transcript
     utt2trans = {}
@@ -59,7 +66,7 @@ if __name__ == "__main__":
             tokens = line.replace('\n', '').split()
             utt = tokens[0].split('.')[0]
             utt = ssb2utt.get(utt)
-            if utt is None:
+            if utt is None or utt not in filtered_wavs:
                 continue
             phones = tokens[2::2]
             phones = [p.replace('5', '0') for p in phones]  # 轻声 5 -> 0
@@ -83,19 +90,14 @@ if __name__ == "__main__":
                     utt2trans[utt].append(final)
     # json.dump(utt2trans, open('utt2trans.json', 'w'))
 
-    # utt of filtered wavs
-    filtered_wavs = set()
-    with open('wav_filtered.scp') as f:
-        for line in f:
-            utt = line.split('\t')[0]
-            filtered_wavs.add(utt)
-
     # utt to timestamps
     utt2time = {}
     with open('phone_ctm.txt') as f:
         for line in f:
             tokens = line.split()
             utt = tokens[0]
+            if utt not in filtered_wavs:
+                continue
             if utt not in utt2time:
                 utt2time[utt] = []
             start = float(tokens[2])
@@ -111,7 +113,7 @@ if __name__ == "__main__":
     align = {i: [] for i in range(5)}
     for k, v in utt2time.items():
         trans = utt2trans.get(k)
-        if trans is None or k not in filtered_wavs:
+        if trans is None:
             continue
         if len(trans) != len(v):
             print(f'WARNING: utt {k} different length of transcript and timestamps:\n{trans}\n{v}')
@@ -124,9 +126,9 @@ if __name__ == "__main__":
             align[tone].append([k, p, v[i][0], v[i][1]])
 
     json.dump(align, open('align.json', 'w'))
-#     """
+    """
 
-"""
+# """
     print("Extracting mel-spectrogram features")
     n_samples = 50000
     align = json.load(open('align.json'))
@@ -152,4 +154,4 @@ if __name__ == "__main__":
                 continue
             time_range_to_file(pjoin(data_root, spk, f'{filename}.wav'), wavpath, start, dur)
             melspectrogram_feature(wavpath, outpath)
-"""
+# """
