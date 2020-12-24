@@ -9,6 +9,7 @@ from os.path import join as pjoin
 import os
 import json
 
+
 data_root = '/NASdata/AudioData/mandarin/AISHELL-2/iOS/data/wav/'
 # 声母
 INITIALS = ['b', 'c', 'ch', 'd', 'f', 'g', 'h', 'j', 'k', 'l', 'm', 'n', 'p', 'q', 'r', 's', 'sh', 't', 'w', 'x', 'y', 'z', 'zh']
@@ -43,7 +44,7 @@ def melspectrogram_feature(audio_path, save_path, fmin=50, fmax=350):
 
 
 if __name__ == "__main__":
-    """
+#     """
     # SSB utterance id to aishell2 utterance id
     ssb2utt = {}
     with open('ssbutt.txt') as f:
@@ -57,9 +58,9 @@ if __name__ == "__main__":
         for line in f:
             tokens = line.replace('\n', '').split()
             utt = tokens[0].split('.')[0]
-            if utt not in ssb2utt:
+            utt = ssb2utt.get(utt)
+            if utt is None:
                 continue
-            utt = ssb2utt[utt]
             phones = tokens[2::2]
             phones = [p.replace('5', '0') for p in phones]  # 轻声 5 -> 0
             # separate initals and finals
@@ -82,6 +83,13 @@ if __name__ == "__main__":
                     utt2trans[utt].append(final)
     # json.dump(utt2trans, open('utt2trans.json', 'w'))
 
+    # utt of filtered wavs
+    filtered_wavs = set()
+    with open('wav_filtered.scp') as f:
+        for line in f:
+            utt = line.split('\t')[0]
+            filtered_wavs.add(utt)
+
     # utt to timestamps
     utt2time = {}
     with open('phone_ctm.txt') as f:
@@ -102,9 +110,9 @@ if __name__ == "__main__":
     # tone to utt, phone, start, dur
     align = {i: [] for i in range(5)}
     for k, v in utt2time.items():
-        if k not in utt2trans:
+        trans = utt2trans.get(k)
+        if trans is None or k not in filtered_wavs:
             continue
-        trans = utt2trans[k]
         if len(trans) != len(v):
             print(f'WARNING: utt {k} different length of transcript and timestamps:\n{trans}\n{v}')
             continue
@@ -114,11 +122,12 @@ if __name__ == "__main__":
                 continue
             tone = int(tone)
             align[tone].append([k, p, v[i][0], v[i][1]])
-        
-    json.dump(align, open('align.json', 'w'))
-    """
 
+    json.dump(align, open('align.json', 'w'))
 #     """
+
+"""
+    print("Extracting mel-spectrogram features")
     n_samples = 50000
     align = json.load(open('align.json'))
     align = {int(k): v for k,v in align.items()}
@@ -143,4 +152,4 @@ if __name__ == "__main__":
                 continue
             time_range_to_file(pjoin(data_root, spk, f'{filename}.wav'), wavpath, start, dur)
             melspectrogram_feature(wavpath, outpath)
-#     """
+"""
