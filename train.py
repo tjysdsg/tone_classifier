@@ -146,7 +146,7 @@ def main():
     train, test = train_test_split(data, test_size=0.3, shuffle=True)
     train, val = train_test_split(train, test_size=0.1, shuffle=True)
 
-    # train_model(ImageLoader(train, batch_size), ImageLoader(val, batch_size), width, height, channels, lr, activation, epochs)
+    train_model(ImageLoader(train, batch_size), ImageLoader(val, batch_size), width, height, channels, lr, activation, epochs)
     test_model('ToneNet.hdf5', ImageLoader(test, batch_size))
 
 

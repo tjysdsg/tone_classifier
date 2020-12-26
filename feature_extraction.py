@@ -37,10 +37,10 @@ def melspectrogram_feature(audio_path, save_path, fmin=50, fmax=350):
     S = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=64, n_fft=2048, hop_length=16, fmin=fmin, fmax=fmax)
 
     plt.figure(figsize=(2.25, 2.25))
-    librosa.display.specshow(librosa.power_to_db(S, ref=np.max), sr=sr, fmin=fmin, fmax=fmax)
+    librosa.display.specshow(librosa.power_to_db(S, ref=np.max), sr=sr, fmin=fmin, fmax=fmax, cmap='magma')
 
-    plt.gca().xaxis.set_major_locator(plt.NullLocator()) 
-    plt.gca().yaxis.set_major_locator(plt.NullLocator()) 
+    plt.gca().xaxis.set_major_locator(plt.NullLocator())
+    plt.gca().yaxis.set_major_locator(plt.NullLocator())
     plt.subplots_adjust(top=1, bottom=0, left=0, right=1, hspace=0, wspace=0) 
     plt.margins(0, 0)
     plt.savefig(save_path)
@@ -48,8 +48,6 @@ def melspectrogram_feature(audio_path, save_path, fmin=50, fmax=350):
 
 
 def extract_feature_for_tone(tone: int, configs):
-    aligndir = pjoin('data', f'{tone}')
-    os.makedirs(aligndir, exist_ok=True)
     outdir = os.path.join('feats', f'{tone}')
     os.makedirs(outdir, exist_ok=True)
 
@@ -63,12 +61,11 @@ def extract_feature_for_tone(tone: int, configs):
         filename, phone, start, dur = e
         spk = filename[1:6]
 
-        wavpath = pjoin(aligndir, f"{j}_{filename}_{phone}.wav")
         outpath = pjoin(outdir, f"{j}_{filename}_{phone}.jpg")
         if os.path.exists(outpath):
             continue
-        time_range_to_file(pjoin(data_root, spk, f'{filename}.wav'), wavpath, start, dur)
-        melspectrogram_feature(wavpath, outpath)
+        time_range_to_file(pjoin(data_root, spk, f'{filename}.wav'), f'tmp.{tone}.wav', start, dur)
+        melspectrogram_feature(f'tmp.{tone}.wav', outpath)
 
 
 if __name__ == "__main__":
