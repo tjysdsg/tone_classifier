@@ -48,6 +48,10 @@ class ImageLoader(Sequence):
         y = np.asarray([b[1] for b in batch], dtype='float32')
         return x, y
 
+    def get_labels(self):
+        y = np.asarray([d[1] for d in self.data], dtype='float32')
+        return y
+
 
 def create_model(width, height, channels, activation):
     model = Sequential()
@@ -109,18 +113,13 @@ def train_model(train_loader, val_loader, width, height, channels, lr, activatio
     )
 
 
-def test_model(model_path, test_loader, batch_size):
+def test_model(model_path, test_loader):
     print("====================== Testing ===========================")
     model = load_model(model_path)
 
-    n = len(test_loader)
-    data = []
-    for i in range(n):
-        data += test_loader[i]  # flatten batched data
-    x = np.asarray([d[0] for d in data])
-    y = np.asarray([d[1] for d in data])
-
-    y_pred = model.predict(x, batch_size=batch_size)
+    y = test_loader.get_labels()
+    y = np.argmax(y, axis=1)
+    y_pred = model.predict(test_loader)
     y_pred = np.argmax(y_pred, axis=1)
 
     confusion_matrix = metrics.confusion_matrix(y, y_pred)
@@ -147,8 +146,8 @@ def main():
     train, test = train_test_split(data, test_size=0.3, shuffle=True)
     train, val = train_test_split(train, test_size=0.1, shuffle=True)
 
-    train_model(ImageLoader(train, batch_size), ImageLoader(val, batch_size), width, height, channels, lr, activation, epochs)
-    test_model('ToneNet.hdf5', ImageLoader(test, batch_size), batch_size)
+    # train_model(ImageLoader(train, batch_size), ImageLoader(val, batch_size), width, height, channels, lr, activation, epochs)
+    test_model('ToneNet.hdf5', ImageLoader(test, batch_size))
 
 
 if __name__ == "__main__":
