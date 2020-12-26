@@ -34,23 +34,23 @@ class ImageLoader(Sequence):
         self.batch_size = batch_size
         self.n = math.ceil(len(self.data) / self.batch_size)
 
+        self.labels = np.asarray([d[1] for d in self.data], dtype='float32')
+        self.files = [d[0] for d in self.data]
+
     def __len__(self):
         return self.n
 
     def __getitem__(self, idx):
-        batch = self.data[idx * self.batch_size:(idx + 1) * self.batch_size]
-
-        def read_img(b):
-            img = np.asarray(Image.open(b), dtype='float32')
-            return preprocess_input(img)
-
-        x = np.asarray([read_img(b[0]) for b in batch])
-        y = np.asarray([b[1] for b in batch], dtype='float32')
+        files = self.files[idx * self.batch_size:(idx + 1) * self.batch_size]
+        y = self.labels[idx * self.batch_size:(idx + 1) * self.batch_size]
+        x = np.asarray([
+            np.asarray(Image.open(f), dtype='float32') for f in files
+        ])
+        x = tf.image.rgb_to_grayscale(x)
         return x, y
 
     def get_labels(self):
-        y = np.asarray([d[1] for d in self.data], dtype='float32')
-        return y
+        return self.labels
 
 
 def create_model(width, height, channels, activation):
@@ -136,7 +136,7 @@ def test_model(model_path, test_loader):
 def main():
     width = 225
     height = 225
-    channels = 3
+    channels = 1
     lr = 0.001
     activation = 'relu'
     epochs = 50

@@ -41,7 +41,7 @@ def extract_feature_for_tone(tone: int, configs):
     for j, e in enumerate(configs):
         prog = int(100 * j / n)
         if prog != prev_prog:
-            print(f'tone {tone}: {prog}%')
+            print(f'tone {tone}: {j}/{n}')
             prev_prog = prog
         filename, phone, start, dur = e
         spk = filename[1:6]
