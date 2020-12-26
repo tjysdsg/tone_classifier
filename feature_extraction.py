@@ -15,10 +15,14 @@ data_root = '/NASdata/AudioData/mandarin/AISHELL-2/iOS/data/wav/'
 INITIALS = ['b', 'c', 'ch', 'd', 'f', 'g', 'h', 'j', 'k', 'l', 'm', 'n', 'p', 'q', 'r', 's', 'sh', 't', 'w', 'x', 'y', 'z', 'zh']
 
 
-def time_range_to_file(inpath: str, outpath: str, start: float, duration: float):
+def time_range_to_file(inpath: str, outpath: str, start: float, duration: float, extra_sec=0.2):
     wav = AudioSegment.from_wav(inpath)
 
-    end = start + duration
+    end = start + duration + extra_sec
+    start -= extra_sec
+    if start < 0:
+        start = 0.
+
     start *= 1000  # milliseconds
     end *= 1000  # milliseconds
 

@@ -89,7 +89,7 @@ def create_model(width, height, channels, activation):
     return model
 
 
-def train(train_loader, val_loader, width, height, channels, lr, activation, epochs):
+def train_model(train_loader, val_loader, width, height, channels, lr, activation, epochs):
     model = create_model(width, height, channels, activation)
     sgd = SGD(lr=lr, momentum=0.9, nesterov=True)
     model.compile(optimizer=sgd, loss='categorical_crossentropy', metrics=['accuracy'])
@@ -109,7 +109,7 @@ def train(train_loader, val_loader, width, height, channels, lr, activation, epo
     )
 
 
-def test(model_path, test_loader, batch_size):
+def test_model(model_path, test_loader, batch_size):
     print("====================== Testing ===========================")
     model = load_model(model_path)
 
@@ -147,12 +147,8 @@ def main():
     train, test = train_test_split(data, test_size=0.3, shuffle=True)
     train, val = train_test_split(train, test_size=0.1, shuffle=True)
 
-    train(
-        ImageLoader(train, batch_size),
-        ImageLoader(val, batch_size),
-        width, height, channels, lr, activation, epochs
-    )
-    test('ToneNet.hdf5', ImageLoader(test, batch_size))
+    train_model(ImageLoader(train, batch_size), ImageLoader(val, batch_size), width, height, channels, lr, activation, epochs)
+    test_model('ToneNet.hdf5', ImageLoader(test, batch_size), batch_size)
 
 
 if __name__ == "__main__":
