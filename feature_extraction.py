@@ -47,6 +47,30 @@ def melspectrogram_feature(audio_path, save_path, fmin=50, fmax=350):
     plt.close('all')
 
 
+def extract_feature_for_tone(tone: int, configs):
+    aligndir = pjoin('data', f'{tone}')
+    os.makedirs(aligndir, exist_ok=True)
+    outdir = os.path.join('feats', f'{tone}')
+    os.makedirs(outdir, exist_ok=True)
+
+    n = len(configs)
+    prev_prog = 0
+    for j, e in enumerate(configs):
+        prog = int(100 * j / n)
+        if prog != prev_prog:
+            print(f'tone {tone}: {prog}%')
+            prev_prog = prog
+        filename, phone, start, dur = e
+        spk = filename[1:6]
+
+        wavpath = pjoin(aligndir, f"{j}_{filename}_{phone}.wav")
+        outpath = pjoin(outdir, f"{j}_{filename}_{phone}.jpg")
+        if os.path.exists(outpath):
+            continue
+        time_range_to_file(pjoin(data_root, spk, f'{filename}.wav'), wavpath, start, dur)
+        melspectrogram_feature(wavpath, outpath)
+
+
 if __name__ == "__main__":
     """
     # SSB utterance id to aishell2 utterance id
@@ -134,28 +158,13 @@ if __name__ == "__main__":
 
 # """
     print("Extracting mel-spectrogram features")
-    n_samples = 50000
     align = json.load(open('align.json'))
     align = {int(k): v for k,v in align.items()}
 
-    for i in range(5)[::-1]:
-        aligndir = pjoin('data', f'{i}')
-        os.makedirs(aligndir, exist_ok=True)
-        outdir = os.path.join('feats', f'{i}')
-        os.makedirs(outdir, exist_ok=True)
-
-        n = len(align[i])
-        for j, e in enumerate(align[i]):
-            if j >= n_samples:
-                break
-            print(f'tone {i}: {j}/{n}', end='\r')
-            filename, phone, start, dur = e
-            spk = filename[1:6]
-
-            wavpath = pjoin(aligndir, f"{j}_{filename}_{phone}.wav")
-            outpath = pjoin(outdir, f"{j}_{filename}_{phone}.jpg")
-            if os.path.exists(outpath):
-                continue
-            time_range_to_file(pjoin(data_root, spk, f'{filename}.wav'), wavpath, start, dur)
-            melspectrogram_feature(wavpath, outpath)
+    from multiprocessing import Process
+    ps = [Process(target=extract_feature_for_tone, args=(i, align[i])) for i in range(5)]
+    for p in ps:
+        p.start()
+    for p in ps:
+        p.join()
 # """
