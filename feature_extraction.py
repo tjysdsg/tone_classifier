@@ -6,7 +6,6 @@ import matplotlib.pyplot as plt
 import scipy.io.wavfile
 from pydub import AudioSegment
 from os.path import join as pjoin
-import os
 import json
 
 
@@ -15,30 +14,16 @@ data_root = '/NASdata/AudioData/mandarin/AISHELL-2/iOS/data/wav/'
 INITIALS = ['b', 'c', 'ch', 'd', 'f', 'g', 'h', 'j', 'k', 'l', 'm', 'n', 'p', 'q', 'r', 's', 'sh', 't', 'w', 'x', 'y', 'z', 'zh']
 
 
-def time_range_to_file(inpath: str, outpath: str, start: float, duration: float, extra_sec=0.2):
-    wav = AudioSegment.from_wav(inpath)
-
-    end = start + duration + extra_sec
-    start -= extra_sec
+def melspectrogram_feature(audio_path: str, save_path: str, start: float, end: float, fmin=50, fmax=350, extra_sec=0.1):
+    y, sr = librosa.load(audio_path, sr=16000)
+    start, end = librosa.time_to_samples([start - extra_sec, start + end + extra_sec], sr=sr)
     if start < 0:
-        start = 0.
-
-    start *= 1000  # milliseconds
-    end *= 1000  # milliseconds
-
-    seg = wav[start:end]
-    seg.export(outpath, format="wav", parameters=["-acodec", "pcm_s16le", "-ac", "1", "-ar", "16000"])
-
-
-def melspectrogram_feature(audio_path, save_path, fmin=50, fmax=350):
-    sr, y = scipy.io.wavfile.read(audio_path)
-    if y.dtype is not np.float:
-        y = y.astype('float32') / 32767
+        start = 0
+    y = y[start:end]
     S = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=64, n_fft=2048, hop_length=16, fmin=fmin, fmax=fmax)
 
     plt.figure(figsize=(2.25, 2.25))
     librosa.display.specshow(librosa.power_to_db(S, ref=np.max), sr=sr, fmin=fmin, fmax=fmax, cmap='magma')
-
     plt.gca().xaxis.set_major_locator(plt.NullLocator())
     plt.gca().yaxis.set_major_locator(plt.NullLocator())
     plt.subplots_adjust(top=1, bottom=0, left=0, right=1, hspace=0, wspace=0) 
@@ -64,8 +49,7 @@ def extract_feature_for_tone(tone: int, configs):
         outpath = pjoin(outdir, f"{j}_{filename}_{phone}.jpg")
         if os.path.exists(outpath):
             continue
-        time_range_to_file(pjoin(data_root, spk, f'{filename}.wav'), f'tmp.{tone}.wav', start, dur)
-        melspectrogram_feature(f'tmp.{tone}.wav', outpath)
+        melspectrogram_feature(pjoin(data_root, spk, f'{filename}.wav'), outpath, start, dur)
 
 
 if __name__ == "__main__":
