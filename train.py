@@ -14,46 +14,7 @@ from tensorflow.keras.optimizers import SGD
 from tensorflow.keras.models import load_model
 
 
-def get_data():
-    content = []
-    label = []
-    for i in range(5):
-        datadir = os.path.join('feats', f'{i}')
-        for f in os.scandir(datadir):
-            if f.is_file() and '.jpg' in f.name:
-                content.append(f.path)
-                label.append(i)
-    label = to_categorical(label, num_classes=5)
-    ret = list(zip(content, label))
-    return ret
-
-
-class ImageLoader(Sequence):
-    def __init__(self, data, batch_size):
-        self.data = data
-        self.batch_size = batch_size
-        self.n = math.ceil(len(self.data) / self.batch_size)
-
-        self.labels = np.asarray([d[1] for d in self.data], dtype='float32')
-        self.files = [d[0] for d in self.data]
-
-    def __len__(self):
-        return self.n
-
-    def __getitem__(self, idx):
-        files = self.files[idx * self.batch_size:(idx + 1) * self.batch_size]
-        y = self.labels[idx * self.batch_size:(idx + 1) * self.batch_size]
-        x = np.asarray([
-            np.asarray(Image.open(f), dtype='float32') for f in files
-        ])
-        x = tf.image.rgb_to_grayscale(x)
-        return x, y
-
-    def get_labels(self):
-        return self.labels
-
-
-def create_model(width, height, channels, activation):
+def create_model(width: int, height: int, channels: int, activation):
     model = Sequential()
     model.add(Conv2D(filters=64, kernel_size=(5, 5), strides=(3, 3), padding='same', input_shape=(width, height, channels)))
     model.add(BatchNormalization())
@@ -93,6 +54,42 @@ def create_model(width, height, channels, activation):
     return model
 
 
+def get_data():
+    files = []
+    label = []
+    for i in range(5):
+        with open(os.path.join('feats', f'{i}.list')) as f:
+            for line in f:
+                files.append(line.replace('\n', ''))
+                label.append(i)
+
+    label = to_categorical(label, num_classes=5)
+    return list(zip(files, label))
+
+
+def parse_data(filename, label):
+    image_string = tf.io.read_file(filename)
+    image = tf.image.decode_jpeg(image_string, channels=1)
+    # convert to float values in [0, 1]
+    image = tf.image.convert_image_dtype(image, tf.float32)
+
+    # images are already 225x225
+    # image = tf.image.resize_images(image, [225, 225]) 
+
+    return image, label
+
+
+def create_data_pipeline(data, batch_size, n_workers=4, shuffle=True):
+    filenames, labels = zip(*data)
+    dataset = tf.data.Dataset.from_tensor_slices((list(filenames), list(labels)))
+    if shuffle:
+        dataset = dataset.shuffle(len(filenames))
+    dataset = dataset.map(parse_data, num_parallel_calls=n_workers)
+    dataset = dataset.batch(batch_size)
+    dataset = dataset.prefetch(1)
+    return dataset
+
+
 def train_model(train_loader, val_loader, width, height, channels, lr, activation, epochs):
     model = create_model(width, height, channels, activation)
     sgd = SGD(lr=lr, momentum=0.9, nesterov=True)
@@ -100,7 +97,7 @@ def train_model(train_loader, val_loader, width, height, channels, lr, activatio
 
     print("====================== training ==========================")
     checkpoint_callback = ModelCheckpoint(filepath="ToneNet.hdf5", verbose=1, save_best_only=True)
-    earlystopping = EarlyStopping(monitor='val_loss', patience=5, verbose=1, mode='min')
+    earlystopping = EarlyStopping(monitor='val_loss', verbose=1, mode='min')
     model.fit(
         train_loader,
         epochs=epochs,
@@ -117,7 +114,7 @@ def test_model(model_path, test_loader):
     print("====================== Testing ===========================")
     model = load_model(model_path)
 
-    y = test_loader.get_labels()
+    y = np.asarray([i for i in test_loader.unbatch().map(lambda _, y: y, num_parallel_calls=4)])
     y = np.argmax(y, axis=1)
     y_pred = model.predict(test_loader)
     y_pred = np.argmax(y_pred, axis=1)
@@ -142,12 +139,17 @@ def main():
     epochs = 50
     batch_size = 128
 
+    print('=========================== loading data ===========================')
     data = get_data()
     train, test = train_test_split(data, test_size=0.3, shuffle=True)
     train, val = train_test_split(train, test_size=0.1, shuffle=True)
 
-    train_model(ImageLoader(train, batch_size), ImageLoader(val, batch_size), width, height, channels, lr, activation, epochs)
-    test_model('ToneNet.hdf5', ImageLoader(test, batch_size))
+    # train_model(
+    #     create_data_pipeline(train, batch_size),
+    #     create_data_pipeline(val, batch_size),
+    #     width, height, channels, lr, activation, epochs
+    # )
+    test_model('ToneNet.hdf5', create_data_pipeline(test, batch_size, shuffle=False))
 
 
 if __name__ == "__main__":
