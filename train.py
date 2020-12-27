@@ -144,11 +144,11 @@ def main():
     train, test = train_test_split(data, test_size=0.3, shuffle=True)
     train, val = train_test_split(train, test_size=0.1, shuffle=True)
 
-    # train_model(
-    #     create_data_pipeline(train, batch_size),
-    #     create_data_pipeline(val, batch_size),
-    #     width, height, channels, lr, activation, epochs
-    # )
+    train_model(
+        create_data_pipeline(train, batch_size),
+        create_data_pipeline(val, batch_size),
+        width, height, channels, lr, activation, epochs
+    )
     test_model('ToneNet.hdf5', create_data_pipeline(test, batch_size, shuffle=False))
 
 
