@@ -41,15 +41,16 @@ def create_model(width: int, height: int, channels: int, activation):
     model.add(Activation(activation))
     model.add(MaxPool2D(pool_size=(2, 2), strides=(2, 2), padding='same'))
 
-    model.add(Flatten())  
-    model.add(Dense(1024))  
+    model.add(Flatten())
+    model.add(Dense(1024))
     model.add(BatchNormalization())
     model.add(Activation(activation))
+
     model.add(Dense(1024))  
     model.add(BatchNormalization())
     model.add(Activation(activation))
 
-    model.add(Dense(5))  
+    model.add(Dense(4))  
     model.add(Activation('softmax'))  
     return model
 
@@ -57,13 +58,13 @@ def create_model(width: int, height: int, channels: int, activation):
 def get_data():
     files = []
     label = []
-    for i in range(5):
+    for i in range(1, 5):
         with open(os.path.join('feats', f'{i}.list')) as f:
             for line in f:
                 files.append(line.replace('\n', ''))
-                label.append(i)
+                label.append(i - 1)
 
-    label = to_categorical(label, num_classes=5)
+    label = to_categorical(label, num_classes=4)
     return list(zip(files, label))
 
 
@@ -103,7 +104,6 @@ def train_model(train_loader, val_loader, width, height, channels, lr, activatio
         epochs=epochs,
         validation_data=val_loader,
         verbose=1,
-        workers=2,
         shuffle=False,
         use_multiprocessing=True,
         callbacks=[checkpoint_callback, earlystopping],
