@@ -4,7 +4,6 @@ import numpy as np
 import os
 import matplotlib.pyplot as plt
 import scipy.io.wavfile
-from pydub import AudioSegment
 from os.path import join as pjoin
 import json
 
@@ -14,16 +13,43 @@ data_root = '/NASdata/AudioData/mandarin/AISHELL-2/iOS/data/wav/'
 INITIALS = ['b', 'c', 'ch', 'd', 'f', 'g', 'h', 'j', 'k', 'l', 'm', 'n', 'p', 'q', 'r', 's', 'sh', 't', 'w', 'x', 'y', 'z', 'zh']
 
 
-def melspectrogram_feature(audio_path: str, save_path: str, start: float, end: float, fmin=50, fmax=350, extra_sec=0.1):
+def chop(audio_path: str, start: float, dur: float):
+    extra_sec = (0.8 - dur) / 2
     y, sr = librosa.load(audio_path, sr=16000)
-    start, end = librosa.time_to_samples([start - extra_sec, start + end + extra_sec], sr=sr)
+    extra_len = librosa.time_to_samples(extra_sec, sr=sr)
+    dur_len = librosa.time_to_samples(dur, sr=sr)
+    
+    start, end = librosa.time_to_samples([start - extra_sec, start + dur + extra_sec], sr=sr)
+    pad_l = 0
+    pad_r = 0
     if start < 0:
+        pad_l = -start
         start = 0
+    if end > y.size:
+        pad_r = end - y.size
+        end = y.size
+    y = np.pad(y, (pad_l, pad_r), 'constant', constant_values=(0, 0))
     y = y[start:end]
-    S = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=64, n_fft=2048, hop_length=16, fmin=fmin, fmax=fmax)
+
+    l = extra_len
+    r = extra_len + dur_len
+    fade_len = min(extra_len, librosa.time_to_samples(0.1, sr=sr))
+    mask = np.zeros_like(y)
+    mask[l-fade_len:l] = np.linspace(0, 1, num=fade_len)
+    mask[r:r+fade_len] = np.linspace(1, 0, num=fade_len)
+    mask[l:r] = 1
+    y *= mask
+    return y
+
+
+def melspectrogram_feature(audio_path: str, save_path: str, start: float, dur: float, fmin=50, fmax=350, extra_sec=0.1):
+    y = chop(audio_path, start, dur)
+    sr = 16000
 
     plt.figure(figsize=(2.25, 2.25))
-    librosa.display.specshow(librosa.power_to_db(S, ref=np.max), sr=sr, fmin=fmin, fmax=fmax, cmap='magma')
+    S = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=64, n_fft=2048, hop_length=16, fmin=fmin, fmax=fmax)
+    librosa.display.specshow(librosa.power_to_db(S, ref=np.max), sr=sr, fmin=fmin, fmax=fmax, cmap='gray')
+
     plt.gca().xaxis.set_major_locator(plt.NullLocator())
     plt.gca().yaxis.set_major_locator(plt.NullLocator())
     plt.subplots_adjust(top=1, bottom=0, left=0, right=1, hspace=0, wspace=0) 
@@ -104,13 +130,17 @@ if __name__ == "__main__":
     with open('phone_ctm.txt') as f:
         for line in f:
             tokens = line.split()
-            utt = tokens[0]
+            utt = tokens[0]  # TODO: sp0.9-* and sp1.1-*
             if utt not in filtered_wavs:
                 continue
             if utt not in utt2time:
                 utt2time[utt] = []
             start = float(tokens[2])
             dur = float(tokens[3])
+            # if dur < 0.128:  # nfft=2048, sr=16000, then min dur = nfft/sr
+            #     continue
+            if dur > 0.8:  # see durations.png
+                continue
             phone = tokens[4]
             if phone in ['$0', 'sil']:  # ignore empty phones
                 continue
@@ -118,8 +148,10 @@ if __name__ == "__main__":
     for k, v in utt2time.items():  # sort by start time
         v.sort(key=lambda x: x[0])
 
+    # all_dur = []
+
     # tone to utt, phone, start, dur
-    align = {i: [] for i in range(5)}
+    align = {i: [] for i in range(4)}
     for k, v in utt2time.items():
         trans = utt2trans.get(k)
         if trans is None:
@@ -132,20 +164,27 @@ if __name__ == "__main__":
             if not tone.isnumeric():
                 continue
             tone = int(tone)
-            align[tone].append([k, p, v[i][0], v[i][1]])
+            if tone == 0:  # not including light tone
+                continue
+            start = v[i][0]
+            dur = v[i][1]
+            align[tone - 1].append([k, p, start, dur])  # 1st -> 4th tones starting from 0
+            # all_dur.append(dur)
 
     json.dump(align, open('align.json', 'w'))
+    # plt.plot(all_dur, 'o')
+    # plt.savefig('durations.png')
     """
 
-# """
+    # """
     print("Extracting mel-spectrogram features")
     align = json.load(open('align.json'))
     align = {int(k): v for k,v in align.items()}
 
     from multiprocessing import Process
-    ps = [Process(target=extract_feature_for_tone, args=(i, align[i])) for i in range(5)]
+    ps = [Process(target=extract_feature_for_tone, args=(i, align[i])) for i in range(4)]
     for p in ps:
         p.start()
     for p in ps:
         p.join()
-# """
+    # """

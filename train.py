@@ -1,5 +1,3 @@
-from PIL import Image
-from utils import preprocess_input
 import numpy as np
 import os
 import math
@@ -58,12 +56,11 @@ def create_model(width: int, height: int, channels: int, activation):
 def get_data():
     files = []
     label = []
-    for i in range(1, 5):
+    for i in range(4):
         with open(os.path.join('feats', f'{i}.list')) as f:
             for line in f:
                 files.append(line.replace('\n', ''))
-                label.append(i - 1)
-
+                label.append(i)
     label = to_categorical(label, num_classes=4)
     return list(zip(files, label))
 
@@ -141,7 +138,7 @@ def main():
 
     print('=========================== loading data ===========================')
     data = get_data()
-    train, test = train_test_split(data, test_size=0.3, shuffle=True)
+    train, test = train_test_split(data, test_size=0.2, shuffle=True)
     train, val = train_test_split(train, test_size=0.1, shuffle=True)
 
     train_model(
