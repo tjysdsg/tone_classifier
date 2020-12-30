@@ -67,7 +67,8 @@ def extract_feature_for_tone(tone: int, configs):
     n = 50000
     prev_prog = 0
     dotlist_file = open(os.path.join('feats', f'{tone}.list'), 'w')
-    for j, e in enumerate(configs):
+    j = 0
+    for e in configs:
         prog = int(100 * j / n)
         if prog != prev_prog:
             print(f'tone {tone}: {j}/{n}')
@@ -87,10 +88,11 @@ def extract_feature_for_tone(tone: int, configs):
             melspectrogram_feature(pjoin(data_root, spk, f'{filename}.wav'), outpath, start, dur)
         except:
             print(f"WARNING: {filename} failed")
-            return
+            continue
 
         # write to feats/*.list
         dotlist_file.write(outpath + '\n')
+        j += 1
     dotlist_file.close()
 
 
