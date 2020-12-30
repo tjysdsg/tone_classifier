@@ -18,7 +18,7 @@ def chop(audio_path: str, start: float, dur: float):
     y, sr = librosa.load(audio_path, sr=16000)
     extra_len = librosa.time_to_samples(extra_sec, sr=sr)
     dur_len = librosa.time_to_samples(dur, sr=sr)
-    
+
     start, end = librosa.time_to_samples([start - extra_sec, start + dur + extra_sec], sr=sr)
     pad_l = 0
     pad_r = 0
@@ -36,6 +36,7 @@ def chop(audio_path: str, start: float, dur: float):
     fade_len = min(extra_len, librosa.time_to_samples(0.1, sr=sr))
     mask = np.zeros_like(y)
     mask[l-fade_len:l] = np.linspace(0, 1, num=fade_len)
+    # FIXME: rhs has larger dimension than lhs
     mask[r:r+fade_len] = np.linspace(1, 0, num=fade_len)
     mask[l:r] = 1
     y *= mask
@@ -62,20 +63,35 @@ def extract_feature_for_tone(tone: int, configs):
     outdir = os.path.join('feats', f'{tone}')
     os.makedirs(outdir, exist_ok=True)
 
-    n = len(configs)
+    # n = len(configs)
+    n = 50000
     prev_prog = 0
+    dotlist_file = open(os.path.join('feats', f'{tone}.list'), 'w')
     for j, e in enumerate(configs):
         prog = int(100 * j / n)
         if prog != prev_prog:
             print(f'tone {tone}: {j}/{n}')
             prev_prog = prog
+
+        if j >= n:
+            break
+
         filename, phone, start, dur = e
         spk = filename[1:6]
 
-        outpath = pjoin(outdir, f"{j}_{filename}_{phone}.jpg")
+        # start is used to distinguish between multiple occurrence of a phone in a sentence
+        outpath = pjoin(outdir, f"{filename}_{phone}_{start}.jpg")
         if os.path.exists(outpath):
             continue
-        melspectrogram_feature(pjoin(data_root, spk, f'{filename}.wav'), outpath, start, dur)
+        try:
+            melspectrogram_feature(pjoin(data_root, spk, f'{filename}.wav'), outpath, start, dur)
+        except:
+            print(f"WARNING: {filename} failed")
+            return
+
+        # write to feats/*.list
+        dotlist_file.write(outpath + '\n')
+    dotlist_file.close()
 
 
 if __name__ == "__main__":
@@ -137,14 +153,15 @@ if __name__ == "__main__":
                 utt2time[utt] = []
             start = float(tokens[2])
             dur = float(tokens[3])
-            # if dur < 0.128:  # nfft=2048, sr=16000, then min dur = nfft/sr
-            #     continue
             if dur > 0.8:  # see durations.png
                 continue
             phone = tokens[4]
+            tone = phone.split('_')[-1]
+            if tone.isnumeric():
+                tone = int(tone)
             if phone in ['$0', 'sil']:  # ignore empty phones
                 continue
-            utt2time[utt].append([start, dur])
+            utt2time[utt].append([start, dur, tone])
     for k, v in utt2time.items():  # sort by start time
         v.sort(key=lambda x: x[0])
 
@@ -157,7 +174,7 @@ if __name__ == "__main__":
         if trans is None:
             continue
         if len(trans) != len(v):
-            print(f'WARNING: utt {k} different length of transcript and timestamps:\n{trans}\n{v}')
+            # print(f'WARNING: utt {k} different length of transcript and timestamps:\n{trans}\n{v}')
             continue
         for i, p in enumerate(trans):
             tone = p[-1]
@@ -168,8 +185,12 @@ if __name__ == "__main__":
                 continue
             start = v[i][0]
             dur = v[i][1]
-            align[tone - 1].append([k, p, start, dur])  # 1st -> 4th tones starting from 0
-            # all_dur.append(dur)
+
+            if tone == v[i][2]:  # add only if ASR results are the same as annotations
+                align[tone - 1].append([k, p, start, dur])  # 1st -> 4th tones starting from 0
+            else:
+                print(f'WARNING: utt {k} contains at least one unmatched tone')
+            all_dur.append(dur)
 
     json.dump(align, open('align.json', 'w'))
     # plt.plot(all_dur, 'o')
