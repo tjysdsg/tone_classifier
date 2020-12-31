@@ -8,40 +8,33 @@ from os.path import join as pjoin
 import json
 import sys
 
+# TODO: Speed perturb
 
 data_root = '/NASdata/AudioData/mandarin/AISHELL-2/iOS/data/wav/'
 # 声母
 INITIALS = ['b', 'c', 'ch', 'd', 'f', 'g', 'h', 'j', 'k', 'l', 'm', 'n', 'p', 'q', 'r', 's', 'sh', 't', 'w', 'x', 'y', 'z', 'zh']
 
 
-def chop(audio_path: str, start: float, dur: float):
-    extra_sec = (0.8 - dur) / 2
+def chop(audio_path: str, start: float, dur: float, max_dur_len=0.8):
+    extra_sec = (max_dur_len - dur) / 2
     y, sr = librosa.load(audio_path, sr=16000)
-    extra_len = librosa.time_to_samples(extra_sec, sr=sr)
-    dur_len = librosa.time_to_samples(dur, sr=sr)
+    s, dur_len, extra_len, L = librosa.time_to_samples([start, dur, extra_sec, max_dur_len], sr=sr)
+    ret = np.zeros(L, dtype='float32')
 
-    start, end = librosa.time_to_samples([start - extra_sec, start + dur + extra_sec], sr=sr)
-    pad_l = 0
-    pad_r = 0
-    if start < 0:
-        pad_l = -start
-        start = 0
-    if end > y.size:
-        pad_r = end - y.size
-        end = y.size
-    y = np.pad(y, (pad_l, pad_r), 'constant', constant_values=(0, 0))
-    y = y[start:end]
+    fade_len = min(extra_len, librosa.time_to_samples(0.025, sr=sr))
+    s = max(0, s - fade_len)
+    e = s + dur_len + fade_len
+    y = y[s:e]
 
-    l = extra_len
-    r = extra_len + dur_len
-    fade_len = min(extra_len, librosa.time_to_samples(0.1, sr=sr))
     mask = np.zeros_like(y)
-    mask[l-fade_len:l] = np.linspace(0, 1, num=fade_len)
-    # FIXME: rhs has larger dimension than lhs
-    mask[r:r+fade_len] = np.linspace(1, 0, num=fade_len)
-    mask[l:r] = 1
+    mask[:fade_len] = np.linspace(0, 1, num=fade_len)
+    mask[-fade_len:] = np.linspace(1, 0, num=fade_len)
+    mask[fade_len:-fade_len] = 1
     y *= mask
-    return y
+    
+    offset = (L - dur_len) // 2 - fade_len
+    ret[offset:offset + y.size] = y
+    return ret
 
 
 def melspectrogram_feature(audio_path: str, save_path: str, start: float, dur: float, fmin=50, fmax=350, extra_sec=0.1):
@@ -60,13 +53,13 @@ def melspectrogram_feature(audio_path: str, save_path: str, start: float, dur: f
     plt.close('all')
 
 
-def extract_feature_for_tone(tone: int, configs):
+def extract_feature_for_tone(tone: int, configs, n=100000):
     outdir = os.path.join('feats', f'{tone}')
     os.makedirs(outdir, exist_ok=True)
 
-    # n = len(configs)
+    if n is None:
+        n = len(configs)
     configs.sort(key=lambda x: f'{x[0]}_{x[1]}_{x[2]}')
-    n = 50000
     prev_prog = 0
     dotlist_file = open(os.path.join('feats', f'{tone}.list'), 'w')
     j = 0
@@ -88,13 +81,13 @@ def extract_feature_for_tone(tone: int, configs):
         if os.path.exists(outpath):
             sys.stdout.write("\033[K")
             print(f"Skipping {outpath}", end='\r')
-            continue
-        try:
-            melspectrogram_feature(pjoin(data_root, spk, f'{filename}.wav'), outpath, start, dur)
-        except Exception as e:
-            sys.stdout.write("\033[K")
-            print(f"WARNING: {filename} failed\n{e}")
-            continue
+        else:
+            try:
+                melspectrogram_feature(pjoin(data_root, spk, f'{filename}.wav'), outpath, start, dur)
+            except Exception as e:
+                sys.stdout.write("\033[K")
+                print(f"WARNING: {filename} failed\n{e}")
+                continue
 
         # write to feats/*.list
         dotlist_file.write(outpath + '\n')
@@ -102,8 +95,7 @@ def extract_feature_for_tone(tone: int, configs):
     dotlist_file.close()
 
 
-if __name__ == "__main__":
-    """
+def gather_stats(max_dur_len=0.8):  # see durations.png
     # SSB utterance id to aishell2 utterance id
     ssb2utt = {}
     with open('ssbutt.txt') as f:
@@ -147,33 +139,39 @@ if __name__ == "__main__":
                     utt2trans[utt].append('er0')   
                 else:
                     utt2trans[utt].append(final)
-    # json.dump(utt2trans, open('utt2trans.json', 'w'))
 
     # utt to timestamps
     utt2time = {}
     with open('phone_ctm.txt') as f:
+        prev_utt = 'fuck'
+        prev_dur = 0
         for line in f:
             tokens = line.split()
-            utt = tokens[0]  # TODO: sp0.9-* and sp1.1-*
+            utt = tokens[0]
             if utt not in filtered_wavs:
                 continue
             if utt not in utt2time:
                 utt2time[utt] = []
+
             start = float(tokens[2])
             dur = float(tokens[3])
-            if dur > 0.8:  # see durations.png
-                continue
             phone = tokens[4]
             tone = phone.split('_')[-1]
+
             if tone.isnumeric():
                 tone = int(tone)
-            if phone in ['$0', 'sil']:  # ignore empty phones
+            if phone in ['$0', 'sil', 'spn']:  # ignore empty phones
                 continue
-            utt2time[utt].append([start, dur, tone])
-    for k, v in utt2time.items():  # sort by start time
-        v.sort(key=lambda x: x[0])
 
-    # all_dur = []
+            # triphone
+            # NOTE: don't change the value of dur, it's the true duration of this phone
+            if utt != prev_utt:
+                utt2time[utt].append([start, dur, tone])
+            else:
+                utt2time[utt][-1][1] += dur  # include this phone in the previous triphone
+                utt2time[utt].append([start - prev_dur, prev_dur + dur, tone])  # include previous phone in this triphone
+            prev_dur = dur
+            prev_utt = utt
 
     # tone to utt, phone, start, dur
     align = {i: [] for i in range(4)}
@@ -194,18 +192,21 @@ if __name__ == "__main__":
             start = v[i][0]
             dur = v[i][1]
 
+            if dur > max_dur_len:
+                continue
+
             if tone == v[i][2]:  # add only if ASR results are the same as annotations
                 align[tone - 1].append([k, p, start, dur])  # 1st -> 4th tones starting from 0
             else:
                 print(f'WARNING: utt {k} contains at least one unmatched tone')
-            all_dur.append(dur)
 
-    json.dump(align, open('align.json', 'w'))
-    # plt.plot(all_dur, 'o')
-    # plt.savefig('durations.png')
-    """
+    with open('align.json', 'w') as f:
+        json.dump(align, f)
 
-    # """
+
+if __name__ == "__main__":
+    # gather_stats()
+
     print("Extracting mel-spectrogram features")
     align = json.load(open('align.json'))
     align = {int(k): v for k,v in align.items()}
@@ -216,4 +217,3 @@ if __name__ == "__main__":
         p.start()
     for p in ps:
         p.join()
-    # """
