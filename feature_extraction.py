@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import scipy.io.wavfile
 from os.path import join as pjoin
 import json
+import sys
 
 
 data_root = '/NASdata/AudioData/mandarin/AISHELL-2/iOS/data/wav/'
@@ -64,6 +65,7 @@ def extract_feature_for_tone(tone: int, configs):
     os.makedirs(outdir, exist_ok=True)
 
     # n = len(configs)
+    configs.sort(key=lambda x: f'{x[0]}_{x[1]}_{x[2]}')
     n = 50000
     prev_prog = 0
     dotlist_file = open(os.path.join('feats', f'{tone}.list'), 'w')
@@ -71,6 +73,7 @@ def extract_feature_for_tone(tone: int, configs):
     for e in configs:
         prog = int(100 * j / n)
         if prog != prev_prog:
+            sys.stdout.write("\033[K")
             print(f'tone {tone}: {j}/{n}')
             prev_prog = prog
 
@@ -83,11 +86,14 @@ def extract_feature_for_tone(tone: int, configs):
         # start is used to distinguish between multiple occurrence of a phone in a sentence
         outpath = pjoin(outdir, f"{filename}_{phone}_{start}.jpg")
         if os.path.exists(outpath):
+            sys.stdout.write("\033[K")
+            print(f"Skipping {outpath}", end='\r')
             continue
         try:
             melspectrogram_feature(pjoin(data_root, spk, f'{filename}.wav'), outpath, start, dur)
-        except:
-            print(f"WARNING: {filename} failed")
+        except Exception as e:
+            sys.stdout.write("\033[K")
+            print(f"WARNING: {filename} failed\n{e}")
             continue
 
         # write to feats/*.list
