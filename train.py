@@ -29,11 +29,6 @@ def create_model(width: int, height: int, channels: int, activation):
     model.add(Activation(activation))
     model.add(MaxPool2D(pool_size=(2, 2), strides=(2, 2), padding='same'))
 
-    model.add(Conv2D(filters=256, kernel_size=(3, 3), strides=(1, 1), padding='same'))
-    model.add(BatchNormalization())
-    model.add(Activation(activation))
-    model.add(MaxPool2D(pool_size=(2, 2), strides=(2, 2), padding='same'))
-
     model.add(Conv2D(filters=512, kernel_size=(3, 3), strides=(1, 1), padding='same'))
     model.add(BatchNormalization())
     model.add(Activation(activation))
@@ -50,6 +45,7 @@ def create_model(width: int, height: int, channels: int, activation):
 
     model.add(Dense(4))  
     model.add(Activation('softmax'))  
+    print(model.summary())
     return model
 
 
