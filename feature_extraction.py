@@ -53,7 +53,7 @@ def melspectrogram_feature(audio_path: str, save_path: str, start: float, dur: f
     plt.close('all')
 
 
-def extract_feature_for_tone(tone: int, configs, n=100000):
+def extract_feature_for_tone(tone: int, configs, n=None):
     outdir = os.path.join('feats', f'{tone}')
     os.makedirs(outdir, exist_ok=True)
 
