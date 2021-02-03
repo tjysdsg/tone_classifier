@@ -15,9 +15,9 @@ data_root = '/NASdata/AudioData/mandarin/AISHELL-2/iOS/data/wav/'
 INITIALS = ['b', 'c', 'ch', 'd', 'f', 'g', 'h', 'j', 'k', 'l', 'm', 'n', 'p', 'q', 'r', 's', 'sh', 't', 'w', 'x', 'y', 'z', 'zh']
 
 
-def chop(audio_path: str, start: float, dur: float, max_dur_len=0.8):
+def chop(y, start: float, dur: float, max_dur_len=0.8):
+    sr = 16000
     extra_sec = (max_dur_len - dur) / 2
-    y, sr = librosa.load(audio_path, sr=16000)
     s, dur_len, extra_len, L = librosa.time_to_samples([start, dur, extra_sec, max_dur_len], sr=sr)
     ret = np.zeros(L, dtype='float32')
 
@@ -31,14 +31,13 @@ def chop(audio_path: str, start: float, dur: float, max_dur_len=0.8):
     mask[-fade_len:] = np.linspace(1, 0, num=fade_len)
     mask[fade_len:-fade_len] = 1
     y *= mask
-    
+
     offset = (L - dur_len) // 2 - fade_len
     ret[offset:offset + y.size] = y
     return ret
 
 
-def melspectrogram_feature(audio_path: str, save_path: str, start: float, dur: float, fmin=50, fmax=350, extra_sec=0.1):
-    y = chop(audio_path, start, dur)
+def melspectrogram_feature(y, save_path: str, start: float, dur: float, fmin=50, fmax=350, extra_sec=0.1):
     sr = 16000
 
     plt.figure(figsize=(2.25, 2.25))
@@ -54,6 +53,9 @@ def melspectrogram_feature(audio_path: str, save_path: str, start: float, dur: f
 
 
 def extract_feature_for_tone(tone: int, configs, n=None):
+    import random
+    from aug import add_random_noise
+
     outdir = os.path.join('feats', f'{tone}')
     os.makedirs(outdir, exist_ok=True)
 
@@ -78,19 +80,40 @@ def extract_feature_for_tone(tone: int, configs, n=None):
 
         # start is used to distinguish between multiple occurrence of a phone in a sentence
         outpath = pjoin(outdir, f"{filename}_{phone}_{start}.jpg")
-        if os.path.exists(outpath):
-            sys.stdout.write("\033[K")
-            print(f"Skipping {outpath}", end='\r')
-        else:
-            try:
-                melspectrogram_feature(pjoin(data_root, spk, f'{filename}.wav'), outpath, start, dur)
-            except Exception as e:
+        outpath1 = pjoin(outdir, f"{filename}_{phone}_{start}_noise.jpg")
+
+        y = None
+        try:
+            if not os.path.exists(outpath) or not os.path.exists(outpath1):
+                y, _ = librosa.load(pjoin(data_root, spk, f'{filename}.wav'), sr=16000)
+                y = chop(y, start, dur)
+            else:
                 sys.stdout.write("\033[K")
-                print(f"WARNING: {filename} failed\n{e}")
-                continue
+                print(f"Skipping {outpath}", end='\r')
+
+            # original
+            if not os.path.exists(outpath):
+                melspectrogram_feature(y, outpath, start, dur)
+            else:
+                sys.stdout.write("\033[K")
+                print(f"Skipping {outpath}", end='\r')
+    
+            # data augmentation
+            if not os.path.exists(outpath1):
+                snr = random.uniform(50, 60)
+                y_noise = add_random_noise(y, snr)
+                melspectrogram_feature(y, outpath1, start, dur)
+            else:
+                sys.stdout.write("\033[K")
+                print(f"Skipping {outpath1}", end='\r')
+        except Exception as e:
+            sys.stdout.write("\033[K")
+            print(f"WARNING: {filename} failed\n{e}")
+            continue
 
         # write to feats/*.list
         dotlist_file.write(outpath + '\n')
+        dotlist_file.write(outpath1 + '\n')
         j += 1
     dotlist_file.close()
 
