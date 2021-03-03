@@ -1,4 +1,5 @@
 import librosa
+import random
 import librosa.display
 import numpy as np
 import os
@@ -7,6 +8,7 @@ import scipy.io.wavfile
 from os.path import join as pjoin
 import json
 import sys
+from multiprocessing import Process
 
 # TODO: Speed perturb
 
@@ -52,73 +54,49 @@ def melspectrogram_feature(y, save_path: str, start: float, dur: float, fmin=50,
     plt.close('all')
 
 
-def extract_feature_for_tone(tone: int, configs, n=None):
-    import random
+def extract_feature(data):
     from aug import add_random_noise
+
+    tone, filename, phone, start, dur = data
+    spk = filename[1:6]
 
     outdir = os.path.join('feats', f'{tone}')
     os.makedirs(outdir, exist_ok=True)
 
-    if n is None:
-        n = len(configs)
-    configs.sort(key=lambda x: f'{x[0]}_{x[1]}_{x[2]}')
-    prev_prog = 0
-    dotlist_file = open(os.path.join('feats', f'{tone}.list'), 'w')
-    j = 0
-    for e in configs:
-        prog = int(100 * j / n)
-        if prog != prev_prog:
+    # start is used to distinguish between multiple occurrence of a phone in a sentence
+    outpath = pjoin(outdir, f"{filename}_{phone}_{start}.jpg")
+    outpath1 = pjoin(outdir, f"{filename}_{phone}_{start}_noise.jpg")
+
+    y = None
+    try:
+        if not os.path.exists(outpath) or not os.path.exists(outpath1):
+            y, _ = librosa.load(pjoin(data_root, spk, f'{filename}.wav'), sr=16000)
+            y = chop(y, start, dur)
+        else:
             sys.stdout.write("\033[K")
-            print(f'tone {tone}: {j}/{n}')
-            prev_prog = prog
+            print(f"Skipping {outpath}", end='\r')
 
-        if j >= n:
-            break
-
-        filename, phone, start, dur = e
-        spk = filename[1:6]
-
-        # start is used to distinguish between multiple occurrence of a phone in a sentence
-        outpath = pjoin(outdir, f"{filename}_{phone}_{start}.jpg")
-        outpath1 = pjoin(outdir, f"{filename}_{phone}_{start}_noise.jpg")
-
-        y = None
-        try:
-            if not os.path.exists(outpath) or not os.path.exists(outpath1):
-                y, _ = librosa.load(pjoin(data_root, spk, f'{filename}.wav'), sr=16000)
-                y = chop(y, start, dur)
-            else:
-                sys.stdout.write("\033[K")
-                print(f"Skipping {outpath}", end='\r')
-
-            # original
-            if not os.path.exists(outpath):
-                melspectrogram_feature(y, outpath, start, dur)
-            else:
-                sys.stdout.write("\033[K")
-                print(f"Skipping {outpath}", end='\r')
+        # original
+        if not os.path.exists(outpath):
+            melspectrogram_feature(y, outpath, start, dur)
+        else:
+            sys.stdout.write("\033[K")
+            print(f"Skipping {outpath}", end='\r')
     
-            # data augmentation
-            if not os.path.exists(outpath1):
-                snr = random.uniform(50, 60)
-                y_noise = add_random_noise(y, snr)
-                melspectrogram_feature(y, outpath1, start, dur)
-            else:
-                sys.stdout.write("\033[K")
-                print(f"Skipping {outpath1}", end='\r')
-        except Exception as e:
+        # data augmentation
+        if not os.path.exists(outpath1):
+            snr = random.uniform(50, 60)
+            y_noise = add_random_noise(y, snr)
+            melspectrogram_feature(y, outpath1, start, dur)
+        else:
             sys.stdout.write("\033[K")
-            print(f"WARNING: {filename} failed\n{e}")
-            continue
-
-        # write to feats/*.list
-        dotlist_file.write(outpath + '\n')
-        dotlist_file.write(outpath1 + '\n')
-        j += 1
-    dotlist_file.close()
+            print(f"Skipping {outpath1}", end='\r')
+    except Exception as e:
+        sys.stdout.write("\033[K")
+        print(f"WARNING: {filename} failed\n{e}")
 
 
-def gather_stats(max_dur_len=0.8):  # see durations.png
+def collect_stats(max_dur_len=0.8):  # see durations.png
     # SSB utterance id to aishell2 utterance id
     ssb2utt = {}
     with open('ssbutt.txt') as f:
@@ -166,8 +144,6 @@ def gather_stats(max_dur_len=0.8):  # see durations.png
     # utt to timestamps
     utt2time = {}
     with open('phone_ctm.txt') as f:
-        prev_utt = 'fuck'
-        prev_dur = 0
         for line in f:
             tokens = line.split()
             utt = tokens[0]
@@ -186,15 +162,7 @@ def gather_stats(max_dur_len=0.8):  # see durations.png
             if phone in ['$0', 'sil', 'spn']:  # ignore empty phones
                 continue
 
-            # triphone
-            # NOTE: don't change the value of dur, it's the true duration of this phone
-            if utt != prev_utt:
-                utt2time[utt].append([start, dur, tone])
-            else:
-                utt2time[utt][-1][1] += dur  # include this phone in the previous triphone
-                utt2time[utt].append([start - prev_dur, prev_dur + dur, tone])  # include previous phone in this triphone
-            prev_dur = dur
-            prev_utt = utt
+            utt2time[utt].append([start, dur, tone])
 
     # tone to utt, phone, start, dur
     align = {i: [] for i in range(4)}
@@ -227,16 +195,25 @@ def gather_stats(max_dur_len=0.8):  # see durations.png
         json.dump(align, f)
 
 
-if __name__ == "__main__":
-    # gather_stats()
+def main():
+    # collect_stats()
 
+    n_jobs = 16
     print("Extracting mel-spectrogram features")
     align = json.load(open('align.json'))
-    align = {int(k): v for k,v in align.items()}
+    data = [[int(label)] + vals for label, vals in align.items() for v in vals]  # list of (tone, utt, phone, start, dur)
+    N = len(data)
+    n_batches = N // n_jobs + 1
 
-    from multiprocessing import Process
-    ps = [Process(target=extract_feature_for_tone, args=(i, align[i])) for i in range(4)]
-    for p in ps:
-        p.start()
-    for p in ps:
-        p.join()
+    for b in range(n_batches):
+        print(f'Batch {b}/{n_batches}')
+        offset = b * n_jobs
+        ps = [Process(target=extract_feature, args=(data[offset + i],)) for i in range(n_jobs) if offset + i < N]
+        for p in ps:
+            p.start()
+        for p in ps:
+            p.join()
+
+
+if __name__ == "__main__":
+    main()
