@@ -178,17 +178,15 @@ def main():
 def validate() -> float:
     print('=' * 25)
     model.eval()
-    correct = 0
-    total = 0
+
+    acc = AverageMeter()
     with torch.no_grad():
         for j, (x, y) in enumerate(val_dataloader):
             y = y.cpu()
-            y_pred = model(x).cpu()
-            _, predicted = torch.max(y_pred.data, -1)
-            total += y.size(0)
-            correct += (predicted == y).sum().item()
+            y_pred = classifier(model(x)).cpu()
+            acc.update(accuracy(y_pred, y)[0].data.item(), y.size(0))
 
-    return correct / total
+    return acc.avg
 
 
 if __name__ == '__main__':
