@@ -155,7 +155,7 @@ def main():
         save_checkpoint(f'exp/{SAVE_DIR}', epoch, model, classifier, optimizer, scheduler)
         # noinspection PyUnresolvedReferences
         save_ramdom_state(
-            f'exp/{save_dir}', random.getstate(), np.random.get_state(), torch.get_rng_state(),
+            f'exp/{SAVE_DIR}', random.getstate(), np.random.get_state(), torch.get_rng_state(),
             torch.cuda.get_rng_state_all()
         )
 
@@ -175,13 +175,20 @@ def main():
             return
 
 
-def validate():
+def validate() -> float:
     model.eval()
+    correct = 0
+    total = 0
     with torch.no_grad():
         for j, (x, y) in enumerate(val_dataloader):
-            y_pred = model(x)
-            acc = accuracy(y_pred, y)
-    return acc
+            y = y.cpu()
+            y_pred = model(x).cpu()
+
+            _, predicted = torch.max(y_pred.data, 1)
+            total += y.size(0)
+            correct += (predicted == y).sum().item()
+
+    return correct / total
 
 
 if __name__ == '__main__':
