@@ -7,7 +7,6 @@ from scipy.signal import fftconvolve
 import sox
 import soundfile
 
-
 noise_list_file = '/Netdata/2017/qinxy/ASV/DeepSpeaker/egs/ffsvc/data/envir/noise_wav_list'
 noise_list = []
 with open(noise_list_file) as f:
@@ -27,7 +26,7 @@ def speed_perturb(y, sr=16000):
 
 def norm_speech(y):
     if np.std(y) == 0:
-        return y 
+        return y
     y = (y - np.mean(y)) / np.std(y)
     return y
 
@@ -56,4 +55,4 @@ def add_random_noise(y, snr):
 
 def add_rir(y, rir_signal):
     rir = norm_speech(rir_signal)
-    return fftconvolve(rir, y)[0 : y.shape[0]]
+    return fftconvolve(rir, y)[0: y.shape[0]]

@@ -7,14 +7,15 @@ import tensorflow as tf
 from tensorflow.keras.utils import to_categorical, Sequence
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Conv2D, Activation, MaxPool2D,Flatten, Dense, BatchNormalization
+from tensorflow.keras.layers import Conv2D, Activation, MaxPool2D, Flatten, Dense, BatchNormalization
 from tensorflow.keras.optimizers import SGD
 from tensorflow.keras.models import load_model
 
 
 def create_model(width: int, height: int, channels: int, activation):
     model = Sequential()
-    model.add(Conv2D(filters=64, kernel_size=(5, 5), strides=(3, 3), padding='same', input_shape=(width, height, channels)))
+    model.add(
+        Conv2D(filters=64, kernel_size=(5, 5), strides=(3, 3), padding='same', input_shape=(width, height, channels)))
     model.add(BatchNormalization())
     model.add(Activation(activation))
     model.add(MaxPool2D(pool_size=(3, 3), strides=(3, 3), padding='same'))
@@ -39,12 +40,12 @@ def create_model(width: int, height: int, channels: int, activation):
     model.add(BatchNormalization())
     model.add(Activation(activation))
 
-    model.add(Dense(1024))  
+    model.add(Dense(1024))
     model.add(BatchNormalization())
     model.add(Activation(activation))
 
-    model.add(Dense(4))  
-    model.add(Activation('softmax'))  
+    model.add(Dense(4))
+    model.add(Activation('softmax'))
     print(model.summary())
     return model
 
