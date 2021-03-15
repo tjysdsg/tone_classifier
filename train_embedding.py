@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from embedding.modules.model_spk import ResNet34StatsPool
-from embedding.dataset import SpectrogramDataset
+from embedding.dataset import SpectrogramDataset, collate_fn_pad
 from embedding.utils import AverageMeter, accuracy, save_checkpoint, save_ramdom_state, get_lr, change_lr
 
 # create output dir
@@ -20,7 +20,7 @@ parser.add_argument('--data_dir', default='feats', type=str)
 parser.add_argument('--data_name', default='train', type=str)
 parser.add_argument('--dur_range', default=[2, 4], nargs='+', type=int)
 parser.add_argument('-j', '--workers', default=20, type=int)
-parser.add_argument('-b', '--batch_size', default=256, type=int)
+parser.add_argument('-b', '--batch_size', default=64, type=int)
 parser.add_argument('--spk_per_batch', default=64, type=int)
 
 # data augmentation
@@ -65,7 +65,10 @@ NUM_CLASSES = 4
 
 dataset = SpectrogramDataset(utt2wav, utt2spk, num_classes=NUM_CLASSES)
 # batch_sampler = WavBatchSampler(dataset, args.dur_range, shuffle=True, batch_size=args.batch_size, drop_last=True)
-train_loader = DataLoader(dataset, num_workers=args.workers, pin_memory=True)
+train_loader = DataLoader(
+    dataset, batch_size=args.batch_size, num_workers=args.workers, pin_memory=True,
+    collate_fn=collate_fn_pad
+)
 
 # validation dataset
 val_wavscp = [line.split() for line in open(f'feats/{args.val_data_name}/wav.scp')]
@@ -74,7 +77,10 @@ val_dataset = SpectrogramDataset(val_wavscp, val_utt2spk, num_classes=NUM_CLASSE
 # batch_sampler = WavBatchSampler(
 #     val_dataset, args.val_dur_range, shuffle=False, batch_size=args.batch_size, drop_last=False
 # )
-val_dataloader = DataLoader(val_dataset, num_workers=args.workers, pin_memory=True)
+val_dataloader = DataLoader(
+    val_dataset, batch_size=args.batch_size, num_workers=args.workers, pin_memory=True,
+    collate_fn=collate_fn_pad
+)
 
 # models
 model = ResNet34StatsPool(
@@ -125,8 +131,8 @@ def main():
         t.set_description(f'epoch {epoch}')
 
         for i, (feats, label) in enumerate(train_loader):
-            if epoch < args.warm_up_epoch:
-                change_lr(optimizer, lr_lambda(len(train_loader) * epoch + i))
+            # if epoch < args.warm_up_epoch:
+            #     change_lr(optimizer, lr_lambda(len(train_loader) * epoch + i))
 
             feats, label = feats.cuda(), label.cuda()
 
