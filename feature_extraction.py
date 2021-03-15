@@ -4,11 +4,15 @@ import librosa.display
 import numpy as np
 import os
 import matplotlib.pyplot as plt
-import scipy.io.wavfile
 from os.path import join as pjoin
 import json
 import sys
+import argparse
 from multiprocessing import Process
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--stage', type=int)
+args = parser.parse_args()
 
 # TODO: Speed perturb
 
@@ -18,54 +22,43 @@ INITIALS = ['b', 'c', 'ch', 'd', 'f', 'g', 'h', 'j', 'k', 'l', 'm', 'n', 'p', 'q
             'z', 'zh']
 
 
-def spectro(y, start: float, dur: float, max_dur=0.6, sr=16000, fmin=50, fmax=350, hop_length=16):
+def spectro(y, start: float, dur: float, sr=16000, fmin=50, fmax=350, hop_length=16):
     from skimage.transform import resize
-
-    # make a general bounding box and crop it
-    extra_dur = (max_dur - dur) / 2
-    bound_s = start - extra_dur
-    bound_e = start + dur + extra_dur
-    bs, be = librosa.time_to_samples([bound_s, bound_e], sr=sr)
-    y = y[bs:be]
 
     # mel-spectrogram
     S = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=64, n_fft=2048, hop_length=hop_length, fmin=fmin, fmax=fmax)
     S = librosa.power_to_db(S, ref=np.max)
-    S = S[::-1, :]
+    # S = S[::-1, :]  # only for visualization
 
-    # then crop precisely to the start and the end of a phone
-    # start = np.max([extra_dur - 0.05, 0])
-    # end = np.min([start + dur + 0.05, max_dur])
-    start = extra_dur
+    # crop to the start and the end of a phone
     end = start + dur
     s, e = librosa.time_to_frames([start, end], sr=sr, hop_length=hop_length)
     s = np.max(s, 0)
     e = np.max(e, 0)
-    S[:, :s] = 0
-    S[:, e + 1:] = 0
+
+    S = S[:, s:e + 1]
 
     # resize
-    S = resize(
-        S, output_shape=(225, 225),
-        anti_aliasing=False, preserve_range=True, clip=False,
-        mode='constant', cval=0, order=0,
-    )
+    # S = resize(
+    #     S, output_shape=(225, 225),
+    #     anti_aliasing=False, preserve_range=True, clip=False,
+    #     mode='constant', cval=0, order=0,
+    # )
     return S
 
 
-def plot_spectro_to_file(S, output_path: str, cmap='gray'):
-    plt.imshow(S, cmap=cmap)
-    plt.gca().xaxis.set_major_locator(plt.NullLocator())
-    plt.gca().yaxis.set_major_locator(plt.NullLocator())
-    plt.subplots_adjust(top=1, bottom=0, left=0, right=1, hspace=0, wspace=0)
-    plt.margins(0, 0)
-    plt.savefig(output_path)
-    plt.close('all')
+def save_spectro_to_file(S, output_path: str):
+    np.save(output_path, S, allow_pickle=False)
+    # plt.imshow(S, cmap='gray')
+    # plt.gca().xaxis.set_major_locator(plt.NullLocator())
+    # plt.gca().yaxis.set_major_locator(plt.NullLocator())
+    # plt.subplots_adjust(top=1, bottom=0, left=0, right=1, hspace=0, wspace=0)
+    # plt.margins(0, 0)
+    # plt.savefig(output_path)
+    # plt.close('all')
 
 
 def extract_feature(data):
-    from aug import add_random_noise
-
     tone, filename, phone, start, dur = data
     spk = filename[1:6]
 
@@ -73,8 +66,8 @@ def extract_feature(data):
     os.makedirs(outdir, exist_ok=True)
 
     # start is used to distinguish between multiple occurrence of a phone in a sentence
-    outpath = pjoin(outdir, f"{filename}_{phone}_{start}.jpg")
-    outpath1 = pjoin(outdir, f"{filename}_{phone}_{start}_noise.jpg")
+    outpath = pjoin(outdir, f"{filename}_{phone}_{start}.npy")
+    outpath1 = pjoin(outdir, f"{filename}_{phone}_{start}_noise.npy")
 
     y = None
     try:
@@ -87,20 +80,21 @@ def extract_feature(data):
         # original
         if not os.path.exists(outpath):
             S = spectro(y, start, dur)
-            plot_spectro_to_file(S, outpath)
+            save_spectro_to_file(S, outpath)
         else:
             sys.stdout.write("\033[K")
             print(f"Skipping {outpath}", end='\r')
 
-        # data augmentation
-        if not os.path.exists(outpath1):
-            snr = random.uniform(50, 60)
-            y_noise = add_random_noise(y, snr)
-            S = spectro(y, start, dur)
-            plot_spectro_to_file(S, outpath1)
-        else:
-            sys.stdout.write("\033[K")
-            print(f"Skipping {outpath1}", end='\r')
+        # TODO: data augmentation
+        # from aug import add_random_noise
+        # if not os.path.exists(outpath1):
+        #     snr = random.uniform(50, 60)
+        #     y_noise = add_random_noise(y, snr)
+        #     S = spectro(y_noise, start, dur)
+        #     save_spectro_to_file(S, outpath1)
+        # else:
+        #     sys.stdout.write("\033[K")
+        #     print(f"Skipping {outpath1}", end='\r')
     except Exception as e:
         sys.stdout.write("\033[K")
         print(f"WARNING: {filename} failed\n{e}")
@@ -190,7 +184,6 @@ def collect_stats(max_dur_len=0.8):  # see durations.png
             prev_dur = dur
             prev_utt = utt
 
-    align = {i: [] for i in range(4)}  # tone to utt, phone, start, dur
     all_data = []  # list of (tone, utt, phone, start, dur)
     for k, v in utt2time.items():
         trans = utt2trans.get(k)
@@ -212,38 +205,32 @@ def collect_stats(max_dur_len=0.8):  # see durations.png
             if dur > max_dur_len:
                 continue
 
-            if tone == v[i][2]:  # add only if ASR results are the same as annotations
-                # `tone` starts at 0
-                align[tone - 1].append([k, p, start, dur])
-                all_data.append([tone - 1, k, p, start, dur])
-            else:
-                print(f'WARNING: utt {k} contains at least one unmatched tone')
-
-    with open('align.json', 'w') as f:
-        json.dump(align, f)
+            # `tone` starts at 0
+            all_data.append([tone - 1, k, p, start, dur])
 
     with open('all_data.json', 'w') as f:
         json.dump(all_data, f)
 
 
 def main():
-    # collect_stats()
+    if args.stage <= 1:
+        collect_stats()
+    else:
+        print("Loading...")
+        n_jobs = 16
+        data = json.load(open('all_data.json'))  # list of (tone, utt, phone, start, dur)
+        N = len(data)
+        n_batches = N // n_jobs + 1
 
-    print("Loading...")
-    n_jobs = 16
-    data = json.load(open('all_data.json'))  # list of (tone, utt, phone, start, dur)
-    N = len(data)
-    n_batches = N // n_jobs + 1
-
-    print("Extracting mel-spectrogram features")
-    for b in range(n_batches):
-        print(f'Batch {b}/{n_batches}')
-        offset = b * n_jobs
-        ps = [Process(target=extract_feature, args=(data[offset + i],)) for i in range(n_jobs) if offset + i < N]
-        for p in ps:
-            p.start()
-        for p in ps:
-            p.join()
+        print("Extracting mel-spectrogram features")
+        for b in range(n_batches):
+            print(f'Batch {b}/{n_batches}')
+            offset = b * n_jobs
+            ps = [Process(target=extract_feature, args=(data[offset + i],)) for i in range(n_jobs) if offset + i < N]
+            for p in ps:
+                p.start()
+            for p in ps:
+                p.join()
 
 
 if __name__ == "__main__":
