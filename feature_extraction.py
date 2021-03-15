@@ -17,40 +17,48 @@ data_root = '/NASdata/AudioData/mandarin/AISHELL-2/iOS/data/wav/'
 INITIALS = ['b', 'c', 'ch', 'd', 'f', 'g', 'h', 'j', 'k', 'l', 'm', 'n', 'p', 'q', 'r', 's', 'sh', 't', 'w', 'x', 'y', 'z', 'zh']
 
 
-def chop(y, start: float, dur: float, max_dur_len=0.8):
-    sr = 16000
-    extra_sec = (max_dur_len - dur) / 2
-    s, dur_len, extra_len, L = librosa.time_to_samples([start, dur, extra_sec, max_dur_len], sr=sr)
-    ret = np.zeros(L, dtype='float32')
+def spectro(y, start: float, dur: float, max_dur=0.6, sr=16000, fmin=50, fmax=350, hop_length=16):
+    from skimage.transform import resize
+    
+    # make a general bounding box and crop it
+    extra_dur = (max_dur - dur) / 2
+    bound_s = start - extra_dur
+    bound_e = start + dur + extra_dur
+    bs, be = librosa.time_to_samples([bound_s, bound_e], sr=sr)
+    y = y[bs:be]
 
-    fade_len = min(extra_len, librosa.time_to_samples(0.025, sr=sr))
-    s = max(0, s - fade_len)
-    e = s + dur_len + fade_len
-    y = y[s:e]
+    # mel-spectrogram
+    S = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=64, n_fft=2048, hop_length=hop_length, fmin=fmin, fmax=fmax)
+    S = librosa.power_to_db(S, ref=np.max)
+    S = S[::-1, :]
 
-    mask = np.zeros_like(y)
-    mask[:fade_len] = np.linspace(0, 1, num=fade_len)
-    mask[-fade_len:] = np.linspace(1, 0, num=fade_len)
-    mask[fade_len:-fade_len] = 1
-    y *= mask
+    # then crop precisely to the start and the end of a phone
+    # start = np.max([extra_dur - 0.05, 0])
+    # end = np.min([start + dur + 0.05, max_dur])
+    start = extra_dur
+    end = start + dur
+    s, e = librosa.time_to_frames([start, end], sr=sr, hop_length=hop_length)
+    s = np.max(s, 0)
+    e = np.max(e, 0)
+    S[:, :s] = 0
+    S[:, e + 1:] = 0
 
-    offset = (L - dur_len) // 2 - fade_len
-    ret[offset:offset + y.size] = y
-    return ret
+    # resize
+    S = resize(
+        S, output_shape=(225, 225),
+        anti_aliasing=False, preserve_range=True, clip=False,
+        mode='constant', cval=0, order=0,
+    )
+    return S
 
 
-def melspectrogram_feature(y, save_path: str, start: float, dur: float, fmin=50, fmax=350, extra_sec=0.1):
-    sr = 16000
-
-    plt.figure(figsize=(2.25, 2.25))
-    S = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=64, n_fft=2048, hop_length=16, fmin=fmin, fmax=fmax)
-    librosa.display.specshow(librosa.power_to_db(S, ref=np.max), sr=sr, fmin=fmin, fmax=fmax, cmap='gray')
-
+def plot_spectro_to_file(S, output_path: str, cmap='gray'):
+    plt.imshow(S, cmap=cmap)
     plt.gca().xaxis.set_major_locator(plt.NullLocator())
     plt.gca().yaxis.set_major_locator(plt.NullLocator())
     plt.subplots_adjust(top=1, bottom=0, left=0, right=1, hspace=0, wspace=0) 
     plt.margins(0, 0)
-    plt.savefig(save_path)
+    plt.savefig(output_path)
     plt.close('all')
 
 
@@ -71,14 +79,14 @@ def extract_feature(data):
     try:
         if not os.path.exists(outpath) or not os.path.exists(outpath1):
             y, _ = librosa.load(pjoin(data_root, spk, f'{filename}.wav'), sr=16000)
-            y = chop(y, start, dur)
         else:
             sys.stdout.write("\033[K")
             print(f"Skipping {outpath}", end='\r')
 
         # original
         if not os.path.exists(outpath):
-            melspectrogram_feature(y, outpath, start, dur)
+            S = spectro(y, start, dur)
+            plot_spectro_to_file(S, outpath)
         else:
             sys.stdout.write("\033[K")
             print(f"Skipping {outpath}", end='\r')
@@ -87,7 +95,8 @@ def extract_feature(data):
         if not os.path.exists(outpath1):
             snr = random.uniform(50, 60)
             y_noise = add_random_noise(y, snr)
-            melspectrogram_feature(y, outpath1, start, dur)
+            S = spectro(y, start, dur)
+            plot_spectro_to_file(S, outpath1)
         else:
             sys.stdout.write("\033[K")
             print(f"Skipping {outpath1}", end='\r')
@@ -164,8 +173,8 @@ def collect_stats(max_dur_len=0.8):  # see durations.png
 
             utt2time[utt].append([start, dur, tone])
 
-    # tone to utt, phone, start, dur
-    align = {i: [] for i in range(4)}
+    align = {i: [] for i in range(4)}  # tone to utt, phone, start, dur
+    all_data = []  # list of (tone, utt, phone, start, dur)
     for k, v in utt2time.items():
         trans = utt2trans.get(k)
         if trans is None:
@@ -187,24 +196,29 @@ def collect_stats(max_dur_len=0.8):  # see durations.png
                 continue
 
             if tone == v[i][2]:  # add only if ASR results are the same as annotations
-                align[tone - 1].append([k, p, start, dur])  # 1st -> 4th tones starting from 0
+                # `tone` starts at 0
+                align[tone - 1].append([k, p, start, dur])
+                all_data.append([tone - 1, k, p, start, dur])
             else:
                 print(f'WARNING: utt {k} contains at least one unmatched tone')
 
     with open('align.json', 'w') as f:
         json.dump(align, f)
 
+    with open('all_data.json', 'w') as f:
+        json.dump(all_data, f)
+
 
 def main():
     # collect_stats()
 
+    print("Loading...")
     n_jobs = 16
-    print("Extracting mel-spectrogram features")
-    align = json.load(open('align.json'))
-    data = [[int(label)] + vals for label, vals in align.items() for v in vals]  # list of (tone, utt, phone, start, dur)
+    data = json.load(open('all_data.json'))  # list of (tone, utt, phone, start, dur)
     N = len(data)
     n_batches = N // n_jobs + 1
 
+    print("Extracting mel-spectrogram features")
     for b in range(n_batches):
         print(f'Batch {b}/{n_batches}')
         offset = b * n_jobs

@@ -1,2 +1,1 @@
 phone_ctm.txt filter=lfs diff=lfs merge=lfs -text
-align.json filter=lfs diff=lfs merge=lfs -text
