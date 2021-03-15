@@ -1,3 +1,4 @@
+import math
 import librosa
 import numpy as np
 import os
@@ -8,6 +9,25 @@ import torchaudio
 from python_speech_features import sigproc
 from scipy.signal import fftconvolve
 from torch.utils.data import Dataset
+
+
+class SpectrogramDataset(Dataset):
+    def __init__(self, wav_scp, utt2label, num_classes: int):
+        self.wav_scp = wav_scp
+        self.utt2label = utt2label
+        self.num_classes = num_classes
+
+    def __len__(self):
+        return len(self.wav_scp)
+
+    def __getitem__(self, idx):
+        # if len(idx) == 2:
+        #     idx, tlen = idx
+
+        utt, filename = self.wav_scp[idx]
+        signal = np.load(filename, allow_pickle=False)
+        signal = torch.from_numpy(signal.astype('float32'))
+        return signal, self.utt2label[utt]
 
 
 class WavDataset(Dataset):

@@ -1,5 +1,6 @@
 #! /usr/bin/env python3
-import torch, os
+import os
+import torch
 
 
 def get_lr(optimizer):

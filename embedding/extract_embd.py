@@ -2,7 +2,7 @@
 import os, argparse, numpy as np
 import torch, torch.nn as nn, modules.model_spk as models
 from torch.utils.data import DataLoader
-from dataset import WavDataset, logFbankCal
+from dataset import SpectrogramDataset, logFbankCal
 
 parser = argparse.ArgumentParser(description='Speaker Embedding Extraction')
 parser.add_argument('--save_dir', type=str)
@@ -36,8 +36,8 @@ featCal = logFbankCal(sample_rate=args.fs,
 featCal.eval()
 
 # dataset
-val_dataset = WavDataset([line.split() for line in open('data/%s/%s.scp' % (args.val_data_name, args.scp_name))],
-                         fs=args.fs)
+val_dataset = SpectrogramDataset([line.split() for line in open('data/%s/%s.scp' % (args.val_data_name, args.scp_name))],
+                                 fs=args.fs)
 val_dataloader = DataLoader(val_dataset, num_workers=4, shuffle=False, batch_size=1)
 
 # models
