@@ -82,11 +82,11 @@ class WavDataset(Dataset):
             return signal + self._norm_speech(noise_signal) * sigma_n, 0
 
     def _truncate_speech(self, signal, tlen, offset=None):
-        if tlen == None:
+        if tlen is None:
             return signal
         if signal.shape[0] <= tlen:
             signal = np.concatenate([signal] * (tlen // signal.shape[0] + 1), axis=0)
-        if offset == None:
+        if offset is None:
             offset = random.randint(0, signal.shape[0] - tlen)
         return np.array(signal[offset: offset + tlen])
 

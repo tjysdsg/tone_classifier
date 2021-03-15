@@ -22,12 +22,14 @@ class Linear(nn.Module):
         self.out_features = out_features
         self.device_id = device_id
 
+        # noinspection PyArgumentList
         self.weight = Parameter(torch.FloatTensor(out_features, in_features))
+        # noinspection PyArgumentList
         self.bias = Parameter(torch.FloatTensor(out_features))
         self.reset_parameters()
 
     def forward(self, x, label):
-        if self.device_id == None:
+        if self.device_id is None:
             out = F.linear(x, self.weight, self.bias)
         else:
             sub_weights = torch.chunk(self.weight, len(self.device_id), dim=0)

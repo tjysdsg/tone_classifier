@@ -7,11 +7,13 @@ from torchaudio import transforms
 class logFbankCal(nn.Module):
     def __init__(self, sample_rate, n_fft, win_length, hop_length, n_mels):
         super(logFbankCal, self).__init__()
-        self.fbankCal = transforms.MelSpectrogram(sample_rate=sample_rate,
-                                                  n_fft=n_fft,
-                                                  win_length=win_length,
-                                                  hop_length=hop_length,
-                                                  n_mels=n_mels)
+        self.fbankCal = transforms.MelSpectrogram(
+            sample_rate=sample_rate,
+            n_fft=n_fft,
+            win_length=win_length,
+            hop_length=hop_length,
+            n_mels=n_mels
+        )
 
     def forward(self, x, is_aug=[]):
         out = self.fbankCal(x)

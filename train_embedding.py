@@ -20,8 +20,9 @@ from embedding.utils.utils import AverageMeter, accuracy, save_checkpoint, save_
 
 parser = argparse.ArgumentParser(description='Deep Speaker Embedding, SGD, ReduceLROnPlateau')
 parser.add_argument('--save_dir', type=str)
-# training dataset
-parser.add_argument('--data_name', default='train_vox1', type=str)
+# dataset
+parser.add_argument('--data_dir', default='feats', type=str)
+parser.add_argument('--data_name', default='train', type=str)
 parser.add_argument('--dur_range', default=[2, 4], nargs='+', type=int)
 parser.add_argument('-j', '--workers', default=20, type=int)
 parser.add_argument('-b', '--batch_size', default=256, type=int)
@@ -77,51 +78,62 @@ torch.cuda.manual_seed_all(SEED)
 torchaudio.initialize_sox()
 
 # feature
-featCal = logFbankCal(sample_rate=args.fs,
-                      n_fft=args.fft,
-                      win_length=int(args.win_len * args.fs),
-                      hop_length=int(args.hop_len * args.fs),
-                      n_mels=args.mels).cuda()
+featCal = logFbankCal(
+    sample_rate=args.fs,
+    n_fft=args.fft,
+    win_length=int(args.win_len * args.fs),
+    hop_length=int(args.hop_len * args.fs),
+    n_mels=args.mels
+).cuda()
 featCal.eval()
 
 # training dataset
-utt2wav = [line.split() for line in open('data/%s/wav.scp' % args.data_name)]
-spk2int = {line.split()[0]: i for i, line in enumerate(open('data/%s/spk2utt' % args.data_name))}
-spk2utt = {line.split()[0]: line.split()[1:] for line in open('data/%s/spk2utt' % args.data_name)}
-utt2spk = {line.split()[0]: spk2int[line.split()[1]] for line in open('data/%s/utt2spk' % args.data_name)}
-noise_list = {'noise': [i.strip('\n') for i in open('data/envir/noise_wav_list')],
-              'music': [i.strip('\n') for i in open('data/envir/music_wav_list')],
-              'babb': [i.strip('\n') for i in open('data/envir/speech_wav_list')],
-              'reverb': [i.strip('\n') for i in open('data/envir/simu_rir_list')]}
+utt2wav = [line.split() for line in open(f'feats/{args.data_name}/wav.scp')]
+spk2int = {line.split()[0]: i for i, line in enumerate(open(f'{args.data_dir}/{args.data_name}/spk2utt'))}
+spk2utt = {line.split()[0]: line.split()[1:] for line in open(f'{args.data_dir}/{args.data_name}/spk2utt')}
+utt2spk = {line.split()[0]: spk2int[line.split()[1]] for line in open(f'{args.data_dir}/{args.data_name}/utt2spk')}
 
-dataset = WavDataset(utt2wav, utt2spk, args.fs, is_aug=args.data_aug, snr=args.snr_range, noise_list=noise_list,
-                     channel=1)
+# get noise data filenames
+noise_data_dir = '/Netdata/2017/qinxy/ASV/DeepSpeaker/egs/ffsvc/data/envir/'
+noise_list = {
+    'noise': [i.strip('\n') for i in open(f'{noise_data_dir}/noise_wav_list')],
+    'music': [i.strip('\n') for i in open(f'{noise_data_dir}/music_wav_list')],
+    'babb': [i.strip('\n') for i in open(f'{noise_data_dir}/speech_wav_list')],
+    'reverb': [i.strip('\n') for i in open(f'{noise_data_dir}/simu_rir_list')],
+}
+
+dataset = WavDataset(
+    utt2wav, utt2spk, args.fs, is_aug=args.data_aug, snr=args.snr_range, noise_list=noise_list, channel=1,
+)
 batch_sampler = WavBatchSampler(dataset, args.dur_range, shuffle=True, batch_size=args.batch_size, drop_last=True)
 train_loader = DataLoader(dataset, batch_sampler=batch_sampler, num_workers=args.workers, pin_memory=True)
 
 # validation dataset
-val_dataset = WavDataset([line.split() for line in open('data/%s/wav.scp' % args.val_data_name)], fs=args.fs)
-batch_sampler = WavBatchSampler(val_dataset, args.val_dur_range, shuffle=False, batch_size=args.batch_size,
-                                drop_last=False)
+val_dataset = WavDataset([line.split() for line in open(f'data/{args.val_data_name}/wav.scp')], fs=args.fs)
+batch_sampler = WavBatchSampler(
+    val_dataset, args.val_dur_range, shuffle=False, batch_size=args.batch_size, drop_last=False
+)
 val_dataloader = DataLoader(val_dataset, batch_sampler=batch_sampler, num_workers=args.workers, pin_memory=True)
 
 # EER & cost calculator
-utt = [line.split()[0] for line in open('data/%s/wav.scp' % args.val_data_name)]
-eer_cal = SVevaluation(utt, utt, 'data/%s/trials' % args.val_data_name, ptar=args.ptar)
+utt = [line.split()[0] for line in open(f'data/{args.val_data_name}/wav.scp')]
+eer_cal = SVevaluation(utt, utt, f'data/{args.val_data_name}/trials', ptar=args.ptar)
 
 # models
-model = getattr(models, args.model)(args.in_planes, args.embd_dim, dropout=args.dropout,
-                                    total_step=args.epochs).cuda()  # resnet34
-classifier = getattr(classifiers, args.classifier)(args.embd_dim, len(spk2int), m=args.angular_m, s=args.angular_s,
-                                                   device_id=[i for i in range(len(args.gpu.split(',')))]).cuda()
+model = getattr(models, args.model)(
+    args.in_planes, args.embd_dim, dropout=args.dropout, total_step=args.epochs
+).cuda()
+classifier = getattr(classifiers, args.classifier)(
+    args.embd_dim, len(spk2int), m=args.angular_m, s=args.angular_s,
+    device_id=[i for i in range(len(args.gpu.split(',')))]
+).cuda()
 
+# criterion, optimizer, scheduler
 criterion = nn.CrossEntropyLoss().cuda()
-# optimizer
 lr = args.lr if args.lr else 0.1 * args.batch_size / 256
-optimizer = torch.optim.SGD(list(model.parameters()) + list(classifier.parameters()),
-                            lr=lr, momentum=args.momentum, weight_decay=args.wd)
-
-# learning rate scheduler
+optimizer = torch.optim.SGD(
+    list(model.parameters()) + list(classifier.parameters()), lr=lr, momentum=args.momentum, weight_decay=args.wd
+)
 batch_per_epoch = len(train_loader)
 lr_lambda = lambda x: lr / (batch_per_epoch * args.warm_up_epoch) * (x + 1)
 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=args.lr_patience, factor=0.1)
@@ -130,6 +142,7 @@ scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=args.
 save_dir = args.save_dir
 os.system('mkdir -p exp/%s' % save_dir)
 
+# load previous model if resume
 epochs, start_epoch = args.epochs, args.start_epoch
 if start_epoch != 0:
     print('Load exp/%s/model_%d.pkl' % (save_dir, start_epoch - 1))
@@ -162,8 +175,6 @@ def main():
         end = time.time()
 
         for i, (feats, is_spec_aug, key) in enumerate(train_loader):
-            #             if i<532:
-            #                 continue
             data_time = time.time() - end
 
             if epoch < args.warm_up_epoch:
@@ -173,8 +184,6 @@ def main():
 
             outputs = classifier(model(featCal(feats, is_spec_aug).transpose(1, 2)), key)
             loss = criterion(outputs, key)
-
-            # outputs = classifier(model(featCal(feats, is_spec_aug)), key)
 
             optimizer.zero_grad()
             loss.backward()
@@ -195,13 +204,18 @@ def main():
                        'LR %.6f\n' % get_lr(optimizer))
             logs.flush()
 
-        save_checkpoint('exp/%s' % save_dir, epoch, model, classifier, optimizer, scheduler)
-        save_ramdom_state('exp/%s' % save_dir, random.getstate(),
-                          np.random.get_state(), torch.get_rng_state(), torch.cuda.get_rng_state_all())
+        save_checkpoint(f'exp/{save_dir}', epoch, model, classifier, optimizer, scheduler)
+        # noinspection PyUnresolvedReferences
+        save_ramdom_state(
+            f'exp/{save_dir}', random.getstate(), np.random.get_state(), torch.get_rng_state(),
+            torch.cuda.get_rng_state_all()
+        )
 
         eer, cost = validate()
-        logs.write('Epoch %d\t  Loss %.4f\t  Accuracy %3.3f\t  lr %f\t  EER %.4f\t  cost %.4f\n'
-                   % (epoch, losses.avg, top1.avg, get_lr(optimizer), eer, cost))
+        logs.write(
+            'Epoch %d\t  Loss %.4f\t  Accuracy %3.3f\t  lr %f\t  EER %.4f\t  cost %.4f\n'
+            % (epoch, losses.avg, top1.avg, get_lr(optimizer), eer, cost)
+        )
 
         last_lr = get_lr(optimizer)
         scheduler.step(losses.avg)
