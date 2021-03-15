@@ -38,7 +38,7 @@ parser.add_argument('--momentum', default=0.95, type=float)
 parser.add_argument('--wd', '--weight_decay', default=1e-4, type=float)
 # learning rate scheduler
 parser.add_argument('--lr', default=None, type=float)
-parser.add_argument('--warm_up_epoch', default=5, type=int)
+parser.add_argument('--warm_up_epoch', default=3, type=int)
 parser.add_argument('--lr_patience', default=10, type=int)
 # loss type
 parser.add_argument('--loss_type', default='CrossEntropy', type=str)
@@ -86,7 +86,7 @@ val_dataloader = DataLoader(
 model = ResNet34StatsPool(
     args.in_planes, args.embd_dim, dropout=args.dropout, total_step=args.epochs
 ).cuda()
-classifier = nn.Linear(args.embd_dim, NUM_CLASSES).cuda()
+classifier = nn.Sequential(nn.Linear(args.embd_dim, NUM_CLASSES), nn.Softmax(dim=-1)).cuda()
 
 # criterion, optimizer, scheduler
 criterion = nn.CrossEntropyLoss().cuda()
@@ -131,8 +131,8 @@ def main():
         t.set_description(f'epoch {epoch}')
 
         for i, (feats, label) in enumerate(train_loader):
-            # if epoch < args.warm_up_epoch:
-            #     change_lr(optimizer, lr_lambda(len(train_loader) * epoch + i))
+            if epoch < args.warm_up_epoch:
+                change_lr(optimizer, lr_lambda(len(train_loader) * epoch + i))
 
             feats, label = feats.cuda(), label.cuda()
 
@@ -161,7 +161,7 @@ def main():
 
         acc = validate()
         print(
-            'Epoch %d\t  Loss %.4f\t  Accuracy %3.3f\t  lr %f\t  acc_val %3.3f\n'
+            '\nEpoch %d\t  Loss %.4f\t  Accuracy %3.3f\t  lr %f\t  acc_val %3.3f\n'
             % (epoch, losses.avg, top1.avg, get_lr(optimizer), acc)
         )
 
@@ -176,6 +176,7 @@ def main():
 
 
 def validate() -> float:
+    print('=' * 25)
     model.eval()
     correct = 0
     total = 0
@@ -183,8 +184,7 @@ def validate() -> float:
         for j, (x, y) in enumerate(val_dataloader):
             y = y.cpu()
             y_pred = model(x).cpu()
-
-            _, predicted = torch.max(y_pred.data, 1)
+            _, predicted = torch.max(y_pred.data, -1)
             total += y.size(0)
             correct += (predicted == y).sum().item()
 
