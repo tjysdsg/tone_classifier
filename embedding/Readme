@@ -1,0 +1,3 @@
+# test
+python extract_embd.py --scp_name wav --in_planes 32 --val_data_name vox_test --save_dir vox12_ResNet34StatsPool-32-128_AMsoftmax-32-0.1
+# 结果保存在 ./exp/vox12_ResNet34StatsPool-32-128_AMsoftmax-32-0.2/vox_test_wav.npy
