@@ -14,12 +14,13 @@ from multiprocessing import Process
 
 data_root = '/NASdata/AudioData/mandarin/AISHELL-2/iOS/data/wav/'
 # 声母
-INITIALS = ['b', 'c', 'ch', 'd', 'f', 'g', 'h', 'j', 'k', 'l', 'm', 'n', 'p', 'q', 'r', 's', 'sh', 't', 'w', 'x', 'y', 'z', 'zh']
+INITIALS = ['b', 'c', 'ch', 'd', 'f', 'g', 'h', 'j', 'k', 'l', 'm', 'n', 'p', 'q', 'r', 's', 'sh', 't', 'w', 'x', 'y',
+            'z', 'zh']
 
 
 def spectro(y, start: float, dur: float, max_dur=0.6, sr=16000, fmin=50, fmax=350, hop_length=16):
     from skimage.transform import resize
-    
+
     # make a general bounding box and crop it
     extra_dur = (max_dur - dur) / 2
     bound_s = start - extra_dur
@@ -56,7 +57,7 @@ def plot_spectro_to_file(S, output_path: str, cmap='gray'):
     plt.imshow(S, cmap=cmap)
     plt.gca().xaxis.set_major_locator(plt.NullLocator())
     plt.gca().yaxis.set_major_locator(plt.NullLocator())
-    plt.subplots_adjust(top=1, bottom=0, left=0, right=1, hspace=0, wspace=0) 
+    plt.subplots_adjust(top=1, bottom=0, left=0, right=1, hspace=0, wspace=0)
     plt.margins(0, 0)
     plt.savefig(output_path)
     plt.close('all')
@@ -90,7 +91,7 @@ def extract_feature(data):
         else:
             sys.stdout.write("\033[K")
             print(f"Skipping {outpath}", end='\r')
-    
+
         # data augmentation
         if not os.path.exists(outpath1):
             snr = random.uniform(50, 60)
@@ -145,14 +146,16 @@ def collect_stats(max_dur_len=0.8):  # see durations.png
 
                 # 去掉儿化
                 if 'er' not in final and final[-2] == 'r':
-                    utt2trans[utt].append(final.replace('r', ''))   
-                    utt2trans[utt].append('er0')   
+                    utt2trans[utt].append(final.replace('r', ''))
+                    utt2trans[utt].append('er0')
                 else:
                     utt2trans[utt].append(final)
 
     # utt to timestamps
     utt2time = {}
     with open('phone_ctm.txt') as f:
+        prev_utt = 'fuck'
+        prev_dur = 0
         for line in f:
             tokens = line.split()
             utt = tokens[0]
@@ -171,7 +174,21 @@ def collect_stats(max_dur_len=0.8):  # see durations.png
             if phone in ['$0', 'sil', 'spn']:  # ignore empty phones
                 continue
 
-            utt2time[utt].append([start, dur, tone])
+            # triphone
+            # NOTE: don't change the value of dur, it's the true duration of this phone
+            # FIXME: what to do when no previous phone
+            if utt != prev_utt:
+                utt2time[utt].append([start, dur, tone])
+            else:
+                # include this phone in the previous triphone
+                utt2time[utt][-1][1] += dur / 2
+
+                # include previous phone in this triphone
+                utt2time[utt].append(
+                    [start - prev_dur / 2, prev_dur / 2 + dur, tone]
+                )
+            prev_dur = dur
+            prev_utt = utt
 
     align = {i: [] for i in range(4)}  # tone to utt, phone, start, dur
     all_data = []  # list of (tone, utt, phone, start, dur)
