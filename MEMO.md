@@ -1,0 +1,6 @@
+用提声纹那套方式，训练一个classifier，用来提取出embedding。这个过程把每个triphone的spectrogram（变长）转换成了一个定长的embedding。
+所以一个句子如果有10个韵母，就能得到10个embedding，这个序列就是个time series。
+
+然后把每个utterance（10个embedding的序列）放进transformer里训练，这样能够用到上下文的信息。
+
+因为transformer这部分input和output的序列长度一样，我们是否还需要decoder?
