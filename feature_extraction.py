@@ -135,7 +135,7 @@ def collect_stats():
                 continue
             phones = tokens[2::2]
             phones = [p.replace('5', '0') for p in phones]  # 轻声 5 -> 0
-            # separate initals and finals
+            # separate initials and finals
             utt2trans[utt] = []
             for p in phones:
                 if p[:2] in INITIALS:
@@ -196,7 +196,6 @@ def collect_stats():
     all_data = []  # list of (tone, utt, phone, start, dur)
     utt2tones = {}  # {utt: [tone, phone, start, dur]}
     for k, v in utt2time.items():
-        utt2tones[k] = []
 
         trans = utt2trans.get(k)
         if trans is None:
@@ -207,7 +206,7 @@ def collect_stats():
 
         for i, p in enumerate(trans):
             tone = p[-1]
-            if not tone.isnumeric():
+            if not tone.isnumeric():  # don't use initials
                 continue
             tone = int(tone)
             if tone == 0:  # not including light tone
@@ -217,6 +216,8 @@ def collect_stats():
 
             tone -= 1  # `tone` starts at 0
 
+            if k not in utt2tones:
+                utt2tones[k] = []
             utt2tones[k].append([tone, p, start, dur])
             all_data.append([tone, k, p, start, dur])
 
