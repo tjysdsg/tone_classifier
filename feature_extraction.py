@@ -22,9 +22,12 @@ INITIALS = ['b', 'c', 'ch', 'd', 'f', 'g', 'h', 'j', 'k', 'l', 'm', 'n', 'p', 'q
             'z', 'zh']
 
 
-def spectro(y, start: float, dur: float, sr=16000, fmin=50, fmax=350, hop_length=16):
-    from skimage.transform import resize
+def get_output_path(utt, phone, start, data_dir, postfix=''):
+    # `start` is used to distinguish between multiple occurrence of a phone in a sentence
+    return pjoin(data_dir, f"{utt}_{phone}_{start:.3f}_{postfix}.npy")
 
+
+def spectro(y, start: float, dur: float, sr=16000, fmin=50, fmax=350, hop_length=16):
     # mel-spectrogram
     S = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=64, n_fft=2048, hop_length=hop_length, fmin=fmin, fmax=fmax)
     S = librosa.power_to_db(S, ref=np.max)
@@ -39,6 +42,7 @@ def spectro(y, start: float, dur: float, sr=16000, fmin=50, fmax=350, hop_length
     S = S[:, s:e + 1]
 
     # resize
+    # from skimage.transform import resize
     # S = resize(
     #     S, output_shape=(225, 225),
     #     anti_aliasing=False, preserve_range=True, clip=False,
@@ -59,26 +63,28 @@ def save_spectro_to_file(S, output_path: str):
 
 
 def extract_feature(data):
-    tone, filename, phone, start, dur = data
-    spk = filename[1:6]
+    tone, utt, phone, start, dur = data
+    spk = utt[1:6]
 
     outdir = os.path.join('feats', f'{tone}')
     os.makedirs(outdir, exist_ok=True)
 
-    # start is used to distinguish between multiple occurrence of a phone in a sentence
-    outpath = pjoin(outdir, f"{filename}_{phone}_{start}.npy")
-    outpath1 = pjoin(outdir, f"{filename}_{phone}_{start}_noise.npy")
+    outpath = get_output_path(utt, phone, start, outdir)
+    outpath_noise = get_output_path(utt, phone, start, outdir, postfix='noise')
+    input_path = pjoin(data_root, spk, f'{utt}.wav')
 
-    y = None
     try:
-        if not os.path.exists(outpath) or not os.path.exists(outpath1):
-            y, _ = librosa.load(pjoin(data_root, spk, f'{filename}.wav'), sr=16000)
-        else:
+        # TODO: Remove this after done
+        #  Fix old path having too many digits in `start`:
+        oldpath = pjoin(outdir, f"{utt}_{phone}_{start}.npy")
+        if os.path.exists(oldpath):
+            os.rename(oldpath, outpath)
             sys.stdout.write("\033[K")
-            print(f"Skipping {outpath}", end='\r')
+            print(f"Renaming {oldpath} to {outpath}", end='\r')
 
         # original
         if not os.path.exists(outpath):
+            y, _ = librosa.load(input_path, sr=16000)
             S = spectro(y, start, dur)
             save_spectro_to_file(S, outpath)
         else:
@@ -86,21 +92,24 @@ def extract_feature(data):
             print(f"Skipping {outpath}", end='\r')
 
         # TODO: data augmentation
-        # from aug import add_random_noise
-        # if not os.path.exists(outpath1):
-        #     snr = random.uniform(50, 60)
-        #     y_noise = add_random_noise(y, snr)
-        #     S = spectro(y_noise, start, dur)
-        #     save_spectro_to_file(S, outpath1)
-        # else:
-        #     sys.stdout.write("\033[K")
-        #     print(f"Skipping {outpath1}", end='\r')
+
+        # add random noise
+        from aug import add_random_noise
+        if not os.path.exists(outpath_noise):
+            y, _ = librosa.load(input_path, sr=16000)
+            snr = random.uniform(50, 60)
+            y_noise = add_random_noise(y, snr)
+            S = spectro(y_noise, start, dur)
+            save_spectro_to_file(S, outpath_noise)
+        else:
+            sys.stdout.write("\033[K")
+            print(f"Skipping {outpath_noise}", end='\r')
     except Exception as e:
         sys.stdout.write("\033[K")
-        print(f"WARNING: {filename} failed\n{e}")
+        print(f"WARNING: {utt} failed\n{e}")
 
 
-def collect_stats(max_dur_len=0.8):  # see durations.png
+def collect_stats():
     # SSB utterance id to aishell2 utterance id
     ssb2utt = {}
     with open('ssbutt.txt') as f:
@@ -185,13 +194,17 @@ def collect_stats(max_dur_len=0.8):  # see durations.png
             prev_utt = utt
 
     all_data = []  # list of (tone, utt, phone, start, dur)
+    utt2tones = {}  # {utt: [tone, phone, start, dur]}
     for k, v in utt2time.items():
+        utt2tones[k] = []
+
         trans = utt2trans.get(k)
         if trans is None:
             continue
         if len(trans) != len(v):
-            # print(f'WARNING: utt {k} different length of transcript and timestamps:\n{trans}\n{v}')
+            print(f'WARNING: utt {k} different length of transcript and timestamps')
             continue
+
         for i, p in enumerate(trans):
             tone = p[-1]
             if not tone.isnumeric():
@@ -202,14 +215,15 @@ def collect_stats(max_dur_len=0.8):  # see durations.png
             start = v[i][0]
             dur = v[i][1]
 
-            if dur > max_dur_len:
-                continue
+            tone -= 1  # `tone` starts at 0
 
-            # `tone` starts at 0
-            all_data.append([tone - 1, k, p, start, dur])
+            utt2tones[k].append([tone, p, start, dur])
+            all_data.append([tone, k, p, start, dur])
 
     with open('all_data.json', 'w') as f:
         json.dump(all_data, f)
+    with open('utt2tones.json', 'w') as f:
+        json.dump(utt2tones, f)
 
 
 def main():

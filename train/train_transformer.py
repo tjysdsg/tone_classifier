@@ -2,6 +2,7 @@ import argparse
 from train.utils import set_seed
 import os
 import torch
+import torch.nn as nn
 from train.modules.model_spk import ResNet34StatsPool
 
 EMBD_DIM = 128
@@ -44,12 +45,19 @@ def load_embedding_model(epoch: int):
     return model
 
 
+def create_transformer():
+    model = nn.Transformer(d_model=EMBD_DIM)
+    return model
+
+
 def main():
     embd_model = load_embedding_model(115)
     embd_model.eval()
 
     for param in embd_model.parameters():
         param.requires_grad = False
+
+    model = create_transformer()
 
 
 if __name__ == '__main__':
