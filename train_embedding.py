@@ -39,7 +39,7 @@ parser.add_argument('--wd', '--weight_decay', default=1e-4, type=float)
 # learning rate scheduler
 parser.add_argument('--lr', default=None, type=float)
 parser.add_argument('--warm_up_epoch', default=3, type=int)
-parser.add_argument('--lr_patience', default=10, type=int)
+parser.add_argument('--lr_patience', default=4, type=int)
 # loss type
 parser.add_argument('--loss_type', default='CrossEntropy', type=str)
 # others

@@ -1,5 +1,1 @@
-- Use std-mandarin data
 - Speed perturb
-- Window size/amount of adjacent frames to add
-- Frequency range of mel spectrogram
-- Add noise/data augmentation
