@@ -46,7 +46,8 @@ def load_embedding_model(epoch: int):
 
 
 def create_transformer():
-    model = nn.Transformer(d_model=EMBD_DIM)
+    from train.modules.transformers import TransEncoder
+    model = TransEncoder(num_classes=NUM_CLASSES, embedding_size=EMBD_DIM)
     return model
 
 
@@ -58,6 +59,14 @@ def main():
         param.requires_grad = False
 
     model = create_transformer()
+
+    # find the max number of tones in a sequence
+    # import json
+    # utt2tones = json.load(open('utt2tones.json'))
+    # max_seq_len = 0
+    # for utt, tones in utt2tones.items():
+    #     max_seq_len = max(max_seq_len, len(tones))
+    # print(max_seq_len)
 
 
 if __name__ == '__main__':
