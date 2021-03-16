@@ -60,7 +60,7 @@ spk2utt = {int(line.split()[0]): line.split()[1:] for line in open(f'{args.data_
 utt2spk = {line.split()[0]: int(line.split()[1]) for line in open(f'{args.data_dir}/{args.data_name}/utt2spk')}
 NUM_CLASSES = 4
 
-dataset = SpectrogramDataset(utt2wav, utt2spk, num_classes=NUM_CLASSES)
+dataset = SpectrogramDataset(utt2wav, utt2spk)
 # batch_sampler = WavBatchSampler(dataset, args.dur_range, shuffle=True, batch_size=args.batch_size, drop_last=True)
 train_loader = DataLoader(
     dataset, batch_size=args.batch_size, num_workers=args.workers, pin_memory=True,
@@ -70,7 +70,7 @@ train_loader = DataLoader(
 # validation dataset
 val_wavscp = [line.split() for line in open(f'feats/{args.val_data_name}/wav.scp')]
 val_utt2spk = {line.split()[0]: line.split()[1] for line in open(f'feats/{args.val_data_name}/utt2spk')}
-val_dataset = SpectrogramDataset(val_wavscp, val_utt2spk, num_classes=NUM_CLASSES)
+val_dataset = SpectrogramDataset(val_wavscp, val_utt2spk)
 # batch_sampler = WavBatchSampler(
 #     val_dataset, args.val_dur_range, shuffle=False, batch_size=args.batch_size, drop_last=False
 # )
