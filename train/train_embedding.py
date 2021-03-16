@@ -1,14 +1,15 @@
 import argparse
 from tqdm import trange
 import numpy as np
+from train.utils import set_seed
 import os
 import random
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from embedding.modules.model_spk import ResNet34StatsPool
-from embedding.dataset import SpectrogramDataset, collate_fn_pad
-from embedding.utils import AverageMeter, accuracy, save_checkpoint, save_ramdom_state, get_lr, change_lr
+from train.modules.model_spk import ResNet34StatsPool
+from train.dataset import SpectrogramDataset, collate_fn_pad
+from utils import AverageMeter, accuracy, save_checkpoint, save_ramdom_state, get_lr, change_lr
 
 # create output dir
 SAVE_DIR = 'embedding'
@@ -51,11 +52,7 @@ args = parser.parse_args()
 
 os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
 
-SEED = args.seed
-np.random.seed(SEED)
-random.seed(SEED)
-torch.manual_seed(SEED)
-torch.cuda.manual_seed_all(SEED)
+set_seed(args.seed)
 
 # training dataset
 utt2wav = [line.split() for line in open(f'feats/{args.data_name}/wav.scp')]
@@ -117,7 +114,6 @@ else:
     print(str(model) + '\n' + str(classifier) + '\n')
 
 model = nn.DataParallel(model)
-classifier.train()
 
 
 def main():
@@ -125,6 +121,7 @@ def main():
     for epoch in range(start_epoch, epochs):
         losses, top1 = AverageMeter(), AverageMeter()
         model.train()
+        classifier.train()
 
         # progress bar
         t = trange(len(train_loader))
@@ -178,6 +175,7 @@ def main():
 def validate() -> float:
     print('=' * 25)
     model.eval()
+    classifier.eval()
 
     acc = AverageMeter()
     with torch.no_grad():

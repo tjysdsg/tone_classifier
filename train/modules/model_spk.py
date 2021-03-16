@@ -1,7 +1,6 @@
-import numpy as np
 import torch.nn as nn
-from embedding.modules.front_resnet import ResNet34
-from embedding.modules.pooling import StatsPool, ScaleDotProductAttention
+from train.modules.front_resnet import ResNet34
+from train.modules.pooling import StatsPool, ScaleDotProductAttention
 
 
 class ResNet34StatsPool(nn.Module):
@@ -17,39 +16,6 @@ class ResNet34StatsPool(nn.Module):
         x = self.front(x.unsqueeze(dim=1))
         x = self.pool(x)
         x = self.bottleneck(x)
-        if self.drop:
-            x = self.drop(x)
-        return x
-
-
-class FTDNNStatsPool(nn.Module):
-
-    def __init__(self, in_planes, embedding_size, total_step=200, dropout=0.5, factorize_step_size=4):
-
-        super(FTDNNStatsPool, self).__init__()
-        self.front = FTDNN(in_planes)
-        self.pool = StatsPool()
-        self.bottleneck = nn.Linear(4096, embedding_size)
-        self.bn = nn.BatchNorm1d(embedding_size)
-        self.nl = nn.LeakyReLU()
-        self.drop = nn.Dropout(dropout) if dropout else None
-
-        self.step = 0
-        self.drop_schedule = np.interp(np.linspace(0, 1, total_step), [0, 0.5, 1], [0, 0.5, 0])
-        self.factorize_step_size = factorize_step_size
-
-    def forward(self, x):
-        if self.training:
-            self.front.set_dropout_alpha(self.drop_schedule[self.step])
-            if self.step % self.factorize_step_size == 1:
-                self.front.step_ftdnn_layers()
-            self.step += self.step
-
-        x = self.front(x)
-        x = self.pool(x)
-        x = self.bottleneck(x)
-        x = self.nl(x)
-        x = self.bn(x)
         if self.drop:
             x = self.drop(x)
         return x
