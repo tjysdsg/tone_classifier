@@ -23,7 +23,10 @@ INITIALS = ['b', 'c', 'ch', 'd', 'f', 'g', 'h', 'j', 'k', 'l', 'm', 'n', 'p', 'q
 
 def get_output_path(utt, phone, start, data_dir, postfix=''):
     # `start` is used to distinguish between multiple occurrence of a phone in a sentence
-    return pjoin(data_dir, f"{utt}_{phone}_{start:.3f}_{postfix}.npy")
+    name = f"{utt}_{phone}_{start:.3f}"
+    if len(postfix) > 0:
+        name += f'_{postfix}'
+    return pjoin(data_dir, f'{name}.npy')
 
 
 def spectro(y, start: float, dur: float, sr=16000, fmin=50, fmax=350, hop_length=16):
