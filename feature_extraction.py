@@ -76,18 +76,17 @@ def extract_feature(tone: int, utt: str, phone: str, start: float, dur: float):
             print(f"Skipping {outpath}", end='\r')
 
         # TODO: data augmentation
-
         # add random noise
-        from aug import add_random_noise
-        if not os.path.exists(outpath_noise):
-            y, _ = librosa.load(input_path, sr=16000)
-            snr = random.uniform(50, 60)
-            y_noise = add_random_noise(y, snr)
-            S = spectro(y_noise, start, dur)
-            save_spectro_to_file(S, outpath_noise)
-        else:
-            sys.stdout.write("\033[K")
-            print(f"Skipping {outpath_noise}", end='\r')
+        # from aug import add_random_noise
+        # if not os.path.exists(outpath_noise):
+        #     y, _ = librosa.load(input_path, sr=16000)
+        #     snr = random.uniform(50, 60)
+        #     y_noise = add_random_noise(y, snr)
+        #     S = spectro(y_noise, start, dur)
+        #     save_spectro_to_file(S, outpath_noise)
+        # else:
+        #     sys.stdout.write("\033[K")
+        #     print(f"Skipping {outpath_noise}", end='\r')
     except Exception as e:
         sys.stdout.write("\033[K")
         print(f"WARNING: {utt} failed\n{e}")
@@ -230,6 +229,7 @@ def main():
 
         print("Extracting mel-spectrogram features")
         for b in range(n_batches):
+            print()
             print(f'Batch {b}/{n_batches}')
             offset = b * n_jobs
             ps = [Process(target=worker, args=(utt2tones, utts[offset + i],)) for i in range(n_jobs) if offset + i < N]
