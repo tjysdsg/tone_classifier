@@ -8,11 +8,12 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from train.modules.model_spk import ResNet34StatsPool
-from train.dataset import SpectrogramDataset, collate_fn_pad
+from train.dataset.dataset import SpectrogramDataset, collate_fn_pad
 from utils import AverageMeter, accuracy, save_checkpoint, save_ramdom_state, get_lr, change_lr
 
 # create output dir
 SAVE_DIR = 'embedding'
+NUM_CLASSES = 5
 os.makedirs(f'exp/{SAVE_DIR}', exist_ok=True)
 
 parser = argparse.ArgumentParser(description='Deep Speaker Embedding, SGD, ReduceLROnPlateau')
@@ -51,17 +52,14 @@ parser.add_argument('--gpu', default='0,1,2,3,4,5,6,7', type=str)
 args = parser.parse_args()
 
 os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
-
 set_seed(args.seed)
 
 # training dataset
 utt2wav = [line.split() for line in open(f'feats/{args.data_name}/wav.scp')]
 spk2utt = {int(line.split()[0]): line.split()[1:] for line in open(f'{args.data_dir}/{args.data_name}/spk2utt')}
 utt2spk = {line.split()[0]: int(line.split()[1]) for line in open(f'{args.data_dir}/{args.data_name}/utt2spk')}
-NUM_CLASSES = 4
 
 dataset = SpectrogramDataset(utt2wav, utt2spk)
-# batch_sampler = WavBatchSampler(dataset, args.dur_range, shuffle=True, batch_size=args.batch_size, drop_last=True)
 train_loader = DataLoader(
     dataset, batch_size=args.batch_size, num_workers=args.workers, pin_memory=True,
     collate_fn=collate_fn_pad
@@ -71,9 +69,6 @@ train_loader = DataLoader(
 val_wavscp = [line.split() for line in open(f'feats/{args.val_data_name}/wav.scp')]
 val_utt2spk = {line.split()[0]: line.split()[1] for line in open(f'feats/{args.val_data_name}/utt2spk')}
 val_dataset = SpectrogramDataset(val_wavscp, val_utt2spk)
-# batch_sampler = WavBatchSampler(
-#     val_dataset, args.val_dur_range, shuffle=False, batch_size=args.batch_size, drop_last=False
-# )
 val_dataloader = DataLoader(
     val_dataset, batch_size=args.batch_size, num_workers=args.workers, pin_memory=True,
     collate_fn=collate_fn_pad

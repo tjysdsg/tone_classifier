@@ -11,7 +11,7 @@ To avoid renaming all the files and strings, 'speaker' means tone index (0 = 1st
 import os
 
 DATA_DIR = 'feats'
-TONES = list(range(4))
+TONES = list(range(5))
 
 
 def main():
