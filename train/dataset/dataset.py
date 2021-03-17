@@ -29,9 +29,9 @@ class SpectrogramDataset(Dataset):
 
 
 class EmbeddingDataset(Dataset):
-    def __init__(self, utt2tones: dict, embd_model):
+    def __init__(self, utts: list, utt2tones: dict, embd_model):
+        self.utts = utts
         self.utt2tones = utt2tones
-        self.utts = list(self.utt2tones.keys())
         self.embd_model = embd_model
 
     def __len__(self):

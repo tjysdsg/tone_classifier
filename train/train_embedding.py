@@ -28,7 +28,7 @@ parser.add_argument('--spk_per_batch', default=64, type=int)
 parser.add_argument('--data_aug', default=True, type=bool)
 parser.add_argument('--snr_range', default=[0, 20], nargs='+', type=int)
 # validation dataset
-parser.add_argument('--val_data_name', default='test', type=str)
+parser.add_argument('--val_data_name', default='val', type=str)
 parser.add_argument('--val_dur_range', default=[8, 8], nargs='+', type=int)
 # model backbone
 parser.add_argument('--in_planes', default=16, type=int)
