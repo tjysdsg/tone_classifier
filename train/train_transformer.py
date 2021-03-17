@@ -1,4 +1,5 @@
 import argparse
+from sklearn.model_selection import train_test_split
 import json
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import ReduceLROnPlateau
@@ -20,7 +21,7 @@ NUM_CLASSES = 4
 SAVE_DIR = 'transformer'
 os.makedirs(f'exp/{SAVE_DIR}', exist_ok=True)
 
-parser = argparse.ArgumentParser(description='Deep Speaker Embedding, SGD, ReduceLROnPlateau')
+parser = argparse.ArgumentParser('train transformer', description='Train embedding on transformer')
 # dataset
 parser.add_argument('--data_dir', default='feats', type=str)
 parser.add_argument('--data_name', default='train', type=str)
@@ -55,18 +56,20 @@ embd_model.eval()
 for param in embd_model.parameters():
     param.requires_grad = False
 
-# train dataset
-utts = [line.split()[0] for line in open(f'feats/{args.data_name}/wav.scp')]
 utt2tones = json.load(open('utt2tones.json'))
+utts = list(utt2tones.keys())
+utts_train, utts_test = train_test_split(utts, test_size=0.25)
+utts_train, utts_val = train_test_split(utts_train, test_size=0.1)
+
+# train dataset
 train_loader = DataLoader(
-    EmbeddingDataset(utts, utt2tones, embd_model), batch_size=args.batch_size, num_workers=args.workers,
+    EmbeddingDataset(utts_train, utt2tones, embd_model), batch_size=args.batch_size, num_workers=args.workers,
     pin_memory=True,
 )
 
 # val dataset
-val_utts = [line.split()[0] for line in open(f'feats/{args.val_data_name}/wav.scp')]
 val_loader = DataLoader(
-    EmbeddingDataset(val_utts, utt2tones, embd_model), batch_size=args.batch_size, num_workers=args.workers,
+    EmbeddingDataset(utts_val, utt2tones, embd_model), batch_size=args.batch_size, num_workers=args.workers,
     pin_memory=True,
 )
 
