@@ -3,7 +3,6 @@ import random
 import librosa.display
 import numpy as np
 import os
-import matplotlib.pyplot as plt
 from os.path import join as pjoin
 import json
 import sys
@@ -48,8 +47,7 @@ def save_spectro_to_file(S, output_path: str):
     np.save(output_path, S, allow_pickle=False)
 
 
-def extract_feature(data):
-    tone, utt, phone, start, dur = data
+def extract_feature(tone: int, utt: str, phone: str, start: float, dur: float):
     spk = utt[1:6]
 
     outdir = os.path.join('feats', f'{tone}')
@@ -93,6 +91,13 @@ def extract_feature(data):
     except Exception as e:
         sys.stdout.write("\033[K")
         print(f"WARNING: {utt} failed\n{e}")
+
+
+def worker(utt2tones: dict, utt):
+    tones = utt2tones[utt]
+    for t in tones:
+        tone, phone, start, dur = t
+        extract_feature(tone, utt, phone, start, dur)
 
 
 def collect_stats():
@@ -218,15 +223,16 @@ def main():
     else:
         print("Loading...")
         n_jobs = 16
-        data = json.load(open('all_data.json'))  # list of (tone, utt, phone, start, dur)
-        N = len(data)
+        utt2tones: dict = json.load(open('utt2tones.json'))
+        utts = list(utt2tones.keys())
+        N = len(utts)
         n_batches = N // n_jobs + 1
 
         print("Extracting mel-spectrogram features")
         for b in range(n_batches):
             print(f'Batch {b}/{n_batches}')
             offset = b * n_jobs
-            ps = [Process(target=extract_feature, args=(data[offset + i],)) for i in range(n_jobs) if offset + i < N]
+            ps = [Process(target=worker, args=(utt2tones, utts[offset + i],)) for i in range(n_jobs) if offset + i < N]
             for p in ps:
                 p.start()
             for p in ps:
