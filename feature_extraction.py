@@ -41,25 +41,11 @@ def spectro(y, start: float, dur: float, sr=16000, fmin=50, fmax=350, hop_length
 
     S = S[:, s:e + 1]
 
-    # resize
-    # from skimage.transform import resize
-    # S = resize(
-    #     S, output_shape=(225, 225),
-    #     anti_aliasing=False, preserve_range=True, clip=False,
-    #     mode='constant', cval=0, order=0,
-    # )
     return S
 
 
 def save_spectro_to_file(S, output_path: str):
     np.save(output_path, S, allow_pickle=False)
-    # plt.imshow(S, cmap='gray')
-    # plt.gca().xaxis.set_major_locator(plt.NullLocator())
-    # plt.gca().yaxis.set_major_locator(plt.NullLocator())
-    # plt.subplots_adjust(top=1, bottom=0, left=0, right=1, hspace=0, wspace=0)
-    # plt.margins(0, 0)
-    # plt.savefig(output_path)
-    # plt.close('all')
 
 
 def extract_feature(data):
@@ -134,7 +120,7 @@ def collect_stats():
             if utt is None or utt not in filtered_wavs:
                 continue
             phones = tokens[2::2]
-            phones = [p.replace('5', '0') for p in phones]  # 轻声 5 -> 0
+            # phones = [p.replace('5', '0') for p in phones]  # 轻声 5 -> 0
             # separate initials and finals
             utt2trans[utt] = []
             for p in phones:
@@ -150,7 +136,7 @@ def collect_stats():
                 # 去掉儿化
                 if 'er' not in final and final[-2] == 'r':
                     utt2trans[utt].append(final.replace('r', ''))
-                    utt2trans[utt].append('er0')
+                    utt2trans[utt].append('er5')
                 else:
                     utt2trans[utt].append(final)
 
@@ -206,15 +192,14 @@ def collect_stats():
 
         for i, p in enumerate(trans):
             tone = p[-1]
-            if not tone.isnumeric():  # don't use initials
-                continue
-            tone = int(tone)
-            if tone == 0:  # not including light tone
-                continue
+            if not tone.isnumeric():  # initials don't have tones, using 0 to represent
+                tone = 0
+            else:
+                tone = int(tone)
+                if tone == 5:  # not including light tone
+                    continue
             start = v[i][0]
             dur = v[i][1]
-
-            tone -= 1  # `tone` starts at 0
 
             if k not in utt2tones:
                 utt2tones[k] = []
