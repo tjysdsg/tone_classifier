@@ -3,6 +3,18 @@ import os
 import torch
 import numpy as np
 import random
+from train.modules.model_spk import ResNet34StatsPool
+
+
+def load_embedding_model(epoch: int, in_planes: int, embd_dim: int) -> ResNet34StatsPool:
+    print(f'loading exp/embedding/model_{epoch}.pkl')
+    model = ResNet34StatsPool(in_planes, embd_dim).cuda()
+    checkpoint = torch.load(f'exp/embedding/model_{epoch}.pkl')
+    model.load_state_dict(checkpoint['model'])
+    model.eval()
+    for param in model.parameters():
+        param.requires_grad = False
+    return model
 
 
 def set_seed(seed):

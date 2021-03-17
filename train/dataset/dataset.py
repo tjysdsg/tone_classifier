@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence
 from torch.utils.data import Dataset
 
 
@@ -8,8 +9,21 @@ def collate_fn_pad(batch):
     x = transposed[0]
     y = transposed[1]
     y = torch.from_numpy(np.asarray(y, dtype='int64'))
-    x = torch.nn.utils.rnn.pad_sequence(x, batch_first=True)
+    x = pad_sequence(x, batch_first=True)
     return x, y
+
+
+def collate_fn_pack_pad(batch):
+    transposed = list(zip(*batch))
+    x = transposed[0]
+    x_lens = [len(e) for e in x]
+
+    y = transposed[1]
+    y = torch.from_numpy(np.asarray(y, dtype='int64'))
+    x = pad_sequence(x, batch_first=True)
+
+    packed = pack_padded_sequence(x, x_lens, batch_first=True)
+    return packed, y
 
 
 class SpectrogramDataset(Dataset):
@@ -54,5 +68,5 @@ class EmbeddingDataset(Dataset):
             y.append(tone)
             x.append(embd)
         y = torch.from_numpy(np.asarray(y, dtype='int64'))
-        x = torch.from_numpy(np.asarray(x, dtype='float32'))
+        x = torch.stack(x, dim=0)
         return x, y
