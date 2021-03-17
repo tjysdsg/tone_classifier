@@ -22,7 +22,7 @@ def collate_fn_pack_pad(batch):
     y = torch.from_numpy(np.asarray(y, dtype='int64'))
     x = pad_sequence(x, batch_first=True)
 
-    packed = pack_padded_sequence(x, x_lens, batch_first=True)
+    packed = pack_padded_sequence(x, x_lens, batch_first=True, enforce_sorted=False)
     return packed, y
 
 

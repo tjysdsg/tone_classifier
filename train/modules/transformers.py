@@ -2,9 +2,15 @@ import torch
 import math
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.nn.utils.rnn import pad_packed_sequence
 
 
 class PositionalEncoding(nn.Module):
+    """
+    Input size:
+    (seq_len, batch_size, feature_size)
+    """
+
     def __init__(self, d_model, dropout=0.1, max_len=50):
         super().__init__()
         self.dropout = nn.Dropout(p=dropout)
@@ -18,7 +24,8 @@ class PositionalEncoding(nn.Module):
         self.register_buffer('pe', pe)
 
     def forward(self, x):
-        x = x + self.pe[:x.size(0), :]
+        x = x + self.pe[:x.size(0)]
+        # print(x[:, 0, :])
         return self.dropout(x)
 
 
@@ -35,20 +42,32 @@ class TransEncoder(nn.Module):
         self.fc = nn.Linear(embedding_size, num_classes)
 
     def forward(self, x):
+        # build src_key_padding_mask
+        x, lengths = pad_packed_sequence(x, batch_first=True)
+        batch_size = x.shape[0]
+        max_seq_len = x.shape[1]
+        padding_mask = torch.zeros(batch_size, max_seq_len + 1, dtype=torch.uint8)
+        padding_mask[(torch.arange(batch_size), lengths)] = 1
+        padding_mask = padding_mask.cumsum(dim=1)[:, :-1]
+
         x = x.transpose(0, 1)
         x = self.pos_enc(x)
-        x = self.transformer_encoder(x)
+        x = self.transformer_encoder(x, src_key_padding_mask=padding_mask)
         x = self.fc(x)
         x = x.transpose(0, 1)
         x = F.softmax(x, -1)
-        return x
+        return x, padding_mask
 
 
 def test():
-    net = TransEncoder(4)
-    a = torch.rand(32, 20, 128)  # batch * seq * feat
-    b = net(a)
+    net = TransEncoder(5)
+    a = [torch.zeros(20, 128), torch.zeros(15, 128), torch.zeros(25, 128)]  # batch * seq * feat
+    lengths = [20, 15, 25]
+    a = torch.nn.utils.rnn.pad_sequence(a, batch_first=True)
+    a = torch.nn.utils.rnn.pack_padded_sequence(a, lengths, batch_first=True, enforce_sorted=False)
+    b, padding_mask = net(a)
     print(b.shape)
+    print(padding_mask)
 
 
 if __name__ == '__main__':
