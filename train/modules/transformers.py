@@ -50,11 +50,14 @@ class TransEncoder(nn.Module):
         padding_mask[(torch.arange(batch_size), lengths)] = 1
         padding_mask = padding_mask.cumsum(dim=1)[:, :-1]
 
+        # convert to seq_len * batch_size * hidden
         x = x.transpose(0, 1)
         x = self.pos_enc(x)
         x = self.transformer_encoder(x, src_key_padding_mask=padding_mask)
-        x = self.fc(x)
+
+        # convert to batch_size * seq_len * hidden
         x = x.transpose(0, 1)
+        x = self.fc(x)
         x = F.softmax(x, -1)
         return x, padding_mask
 
