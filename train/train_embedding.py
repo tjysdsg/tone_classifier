@@ -79,10 +79,10 @@ val_dataloader = DataLoader(
 model = ResNet34StatsPool(
     args.in_planes, args.embd_dim, dropout=args.dropout, total_step=args.epochs
 ).cuda()
-classifier = nn.Sequential(nn.Linear(args.embd_dim, NUM_CLASSES), nn.LogSoftmax(dim=-1)).cuda()
+classifier = nn.Linear(args.embd_dim, NUM_CLASSES).cuda()
 
 # criterion, optimizer, scheduler
-criterion = nn.NLLLoss().cuda()
+criterion = nn.CrossEntropyLoss().cuda()
 lr = args.lr if args.lr else 0.1 * args.batch_size / 256
 optimizer = torch.optim.SGD(
     list(model.parameters()) + list(classifier.parameters()), lr=lr, momentum=args.momentum, weight_decay=args.wd
