@@ -1,3 +1,4 @@
+import os
 import argparse
 from tqdm import trange
 from sklearn.model_selection import train_test_split
@@ -8,7 +9,6 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from train.dataset.dataset import EmbeddingDataset, collate_fn_pack_pad
 from train.modules.transformers import TransEncoder
 from train.utils import set_seed, AverageMeter, accuracy, save_checkpoint, save_ramdom_state, get_lr
-import os
 import torch
 import torch.nn as nn
 from train.modules.model_spk import ResNet34StatsPool
@@ -21,15 +21,12 @@ NUM_CLASSES = 4
 SAVE_DIR = 'transformer'
 os.makedirs(f'exp/{SAVE_DIR}', exist_ok=True)
 
-parser = argparse.ArgumentParser('train transformer', description='Train embedding on transformer')
-# dataset
+parser = argparse.ArgumentParser(description='Train embedding on transformer')
 parser.add_argument('--data_dir', default='feats', type=str)
 parser.add_argument('--data_name', default='train', type=str)
 parser.add_argument('-j', '--workers', default=20, type=int)
 parser.add_argument('-b', '--batch_size', default=64, type=int)
 parser.add_argument('--val_data_name', default='val', type=str)
-
-# others
 parser.add_argument('--epochs', default=500, type=int)
 parser.add_argument('--start_epoch', default=0, type=int)
 parser.add_argument('--seed', default=3007123, type=int)

@@ -1,5 +1,4 @@
 import librosa
-import random
 import librosa.display
 import numpy as np
 import os
@@ -8,10 +7,6 @@ import json
 import sys
 import argparse
 from multiprocessing import Process
-
-parser = argparse.ArgumentParser()
-parser.add_argument('--stage', type=int)
-args = parser.parse_args()
 
 # TODO: Speed perturb
 
@@ -220,6 +215,10 @@ def collect_stats():
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--stage', type=int)
+    args = parser.parse_args()
+
     if args.stage <= 1:
         collect_stats()
     else:
