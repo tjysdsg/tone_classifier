@@ -2,6 +2,7 @@ import argparse
 from tqdm import trange
 import numpy as np
 from train.utils import set_seed
+from sklearn.metrics import confusion_matrix
 import os
 import random
 import torch
@@ -173,11 +174,20 @@ def validate() -> float:
     classifier.eval()
 
     acc = AverageMeter()
+    ys = []
+    preds = []
     with torch.no_grad():
         for j, (x, y) in enumerate(val_dataloader):
             y = y.cpu()
             y_pred = classifier(model(x)).cpu()
+            ys.append(y)
+            preds.append(torch.argmax(y_pred, dim=-1))
+
             acc.update(accuracy(y_pred, y)[0].data.item(), y.size(0))
+    ys = torch.cat(ys)
+    preds = torch.cat(preds)
+    print('Confusion Matrix:')
+    print(confusion_matrix(ys.numpy(), preds.numpy()))
 
     return acc.avg
 
