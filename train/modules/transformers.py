@@ -57,9 +57,11 @@ class TransEncoder(nn.Module):
 
         # convert to batch_size * seq_len * hidden
         x = x.transpose(0, 1)
+        x = torch.mean(x, dim=1)
+        x = torch.flatten(x, 1)
         x = self.fc(x)
         x = F.softmax(x, -1)
-        return x, padding_mask
+        return x  # , padding_mask
 
 
 def test():

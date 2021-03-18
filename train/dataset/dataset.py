@@ -54,7 +54,6 @@ class EmbeddingDataset(Dataset):
     def __getitem__(self, idx):
         from feature_extraction import get_output_path
         utt = self.utts[idx]
-        print('utt', utt)
         data = self.utt2tones[utt]
         y = []
         x = []
@@ -63,8 +62,8 @@ class EmbeddingDataset(Dataset):
             signal = np.load(path, allow_pickle=False)
             signal = np.moveaxis(signal, 0, 1)
             signal = torch.from_numpy(signal.astype('float32'))
+            signal = signal.unsqueeze(0)
             embd = self.embd_model(signal)
-            print('Embd shape', embd.shape)
             y.append(tone)
             x.append(embd)
         y = torch.from_numpy(np.asarray(y, dtype='int64'))

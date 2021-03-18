@@ -1,13 +1,13 @@
 import argparse
+from tqdm import trange
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import confusion_matrix
 import json
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-from train.dataset.dataset import EmbeddingDataset
+from train.dataset.dataset import EmbeddingDataset, collate_fn_pack_pad
 from train.modules.transformers import TransEncoder
-from ignite.engine import Events, create_supervised_trainer, create_supervised_evaluator
-from ignite.metrics import Accuracy, Loss
-from train.utils import set_seed
+from train.utils import set_seed, AverageMeter, accuracy, save_checkpoint, save_ramdom_state, get_lr
 import os
 import torch
 import torch.nn as nn
@@ -33,10 +33,7 @@ parser.add_argument('--val_data_name', default='val', type=str)
 parser.add_argument('--epochs', default=500, type=int)
 parser.add_argument('--start_epoch', default=0, type=int)
 parser.add_argument('--seed', default=3007123, type=int)
-parser.add_argument('--gpu', default='0,1,2,3,4,5,6,7', type=str)
 args = parser.parse_args()
-
-os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
 
 set_seed(args.seed)
 
@@ -50,7 +47,7 @@ def load_embedding_model(epoch: int):
 
 
 # load and freeze embedding model
-embd_model = load_embedding_model(115)
+embd_model = load_embedding_model(121)
 embd_model.eval()
 
 for param in embd_model.parameters():
@@ -64,54 +61,88 @@ utts_train, utts_val = train_test_split(utts_train, test_size=0.1)
 # train dataset
 train_loader = DataLoader(
     EmbeddingDataset(utts_train, utt2tones, embd_model), batch_size=args.batch_size, num_workers=args.workers,
-    pin_memory=True,
+    pin_memory=True, collate_fn=collate_fn_pack_pad,
 )
 
 # val dataset
 val_loader = DataLoader(
     EmbeddingDataset(utts_val, utt2tones, embd_model), batch_size=args.batch_size, num_workers=args.workers,
-    pin_memory=True,
+    pin_memory=True, collate_fn=collate_fn_pack_pad,
 )
 
 # model, optimizer, criterion, scheduler, trainer
-model = TransEncoder(num_classes=NUM_CLASSES, embedding_size=EMBD_DIM)
+model = TransEncoder(num_classes=NUM_CLASSES, embedding_size=EMBD_DIM).cuda()
+model = nn.DataParallel(model)
 optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.8)
-criterion = nn.CrossEntropyLoss()
+criterion = nn.CrossEntropyLoss().cuda()
 scheduler = ReduceLROnPlateau(optimizer, patience=4, verbose=True)
-trainer = create_supervised_trainer(model, optimizer, criterion)
-
-# evaluator
-val_metrics = {
-    "accuracy": Accuracy(),
-    "loss": Loss(criterion)
-}
-evaluator = create_supervised_evaluator(model, metrics=val_metrics)
 
 
-@trainer.on(Events.ITERATION_COMPLETED(every=100))
-def log_training_loss(trainer):
-    print(f"Epoch[{trainer.state.epoch}] Loss: {trainer.state.output:.2f}")
+def main():
+    for epoch in range(500):
+        losses, top1 = AverageMeter(), AverageMeter()
+        model.train()
+
+        # progress bar
+        t = trange(len(train_loader))
+        t.set_description(f'epoch {epoch}')
+
+        for i, (feats, label) in enumerate(train_loader):
+            feats, label = feats.cuda(), label.cuda()
+
+            outputs = model(feats)
+            loss = criterion(outputs, label)
+
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+            prec1 = accuracy(outputs.data, label)
+            losses.update(loss.data.item(), feats.size(0))
+            top1.update(prec1[0].data.item(), feats.size(0))
+
+            # update progress bar
+            t.set_postfix(loss=losses.val, loss_avg=losses.avg, acc=top1.val, acc_avg=top1.avg,
+                          lr=get_lr(optimizer))
+            t.update()
+
+        # TODO: save_checkpoint(f'exp/{SAVE_DIR}', epoch, model, classifier, optimizer, scheduler)
+        # TODO: save_ramdom_state(
+        #     f'exp/{SAVE_DIR}', random.getstate(), np.random.get_state(), torch.get_rng_state(),
+        #     torch.cuda.get_rng_state_all()
+        #  )
+
+        acc = validate()
+        print(
+            '\nEpoch %d\t  Loss %.4f\t  Accuracy %3.3f\t  lr %f\t  acc_val %3.3f\n'
+            % (epoch, losses.avg, top1.avg, get_lr(optimizer), acc)
+        )
+
+        scheduler.step(losses.avg)
 
 
-@trainer.on(Events.EPOCH_COMPLETED)
-def log_training_results(trainer):
-    evaluator.run(train_loader)
-    metrics = evaluator.state.metrics
-    print(
-        f"Training Results - "
-        f"Epoch: {trainer.state.epoch}  Avg accuracy: {metrics['accuracy']:.2f} Avg loss: {metrics['loss']:.2f}"
-    )
+def validate() -> float:
+    print('=' * 25)
+    model.eval()
+
+    acc = AverageMeter()
+    ys = []
+    preds = []
+    with torch.no_grad():
+        for j, (x, y) in enumerate(val_loader):
+            y = y.cpu()
+            y_pred = model(x).cpu()
+            ys.append(y)
+            preds.append(torch.argmax(y_pred, dim=-1))
+
+            acc.update(accuracy(y_pred, y)[0].data.item(), y.size(0))
+    ys = torch.cat(ys)
+    preds = torch.cat(preds)
+    print('Confusion Matrix:')
+    print(confusion_matrix(ys.numpy(), preds.numpy()))
+
+    return acc.avg
 
 
-@trainer.on(Events.EPOCH_COMPLETED)
-def log_validation_results(trainer):
-    evaluator.run(val_loader)
-    metrics = evaluator.state.metrics
-    print(
-        f"Validation Results - "
-        f"Epoch: {trainer.state.epoch}  Avg accuracy: {metrics['accuracy']:.2f} Avg loss: {metrics['loss']:.2f}"
-    )
-    scheduler.step(metrics['loss'])
-
-
-trainer.run(train_loader, max_epochs=500)
+if __name__ == '__main__':
+    main()
