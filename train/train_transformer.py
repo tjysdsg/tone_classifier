@@ -8,10 +8,10 @@ from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from train.dataset.dataset import SequentialEmbeddingDataset, collate_sequential_embedding
 from train.modules.transformers import TransEncoder
-from train.utils import set_seed, AverageMeter, masked_accuracy, save_transformer_checkpoint, get_lr
+from train.utils import (set_seed, AverageMeter, masked_accuracy, save_transformer_checkpoint, get_lr,
+                         load_embedding_model)
 import torch
 import torch.nn as nn
-from train.modules.model_spk import ResNet34StatsPool
 
 EMBD_DIM = 128
 IN_PLANES = 16
@@ -34,21 +34,8 @@ args = parser.parse_args()
 
 set_seed(args.seed)
 
-
-def load_embedding_model(epoch: int):
-    print(f'loading exp/embedding/model_{epoch}.pkl')
-    model = ResNet34StatsPool(IN_PLANES, EMBD_DIM)
-    checkpoint = torch.load(f'exp/embedding/model_{epoch}.pkl')
-    model.load_state_dict(checkpoint['model'])
-    return model
-
-
 # load and freeze embedding model
-embd_model = load_embedding_model(121)
-embd_model.eval()
-
-for param in embd_model.parameters():
-    param.requires_grad = False
+embd_model = load_embedding_model(121, IN_PLANES, EMBD_DIM)
 
 utt2tones = json.load(open('utt2tones_fixed.json'))
 utts = list(utt2tones.keys())

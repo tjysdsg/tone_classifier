@@ -23,6 +23,18 @@ def set_seed(seed):
     torch.cuda.manual_seed_all(seed)
 
 
+def load_embedding_model(epoch: int, in_planes: int, embd_dim: int):
+    print(f'loading exp/embedding/model_{epoch}.pkl')
+    model = ResNet34StatsPool(in_planes, embd_dim)
+    checkpoint = torch.load(f'exp/embedding/model_{epoch}.pkl')
+    model.load_state_dict(checkpoint['model'])
+    model.eval()
+
+    for param in model.parameters():
+        param.requires_grad = False
+    return model
+
+
 def get_lr(optimizer):
     for param_group in optimizer.param_groups:
         return param_group['lr']
