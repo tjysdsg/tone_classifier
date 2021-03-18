@@ -2,7 +2,6 @@ import torch
 import math
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.nn.utils.rnn import pad_packed_sequence
 
 
 class PositionalEncoding(nn.Module):
@@ -41,14 +40,16 @@ class TransEncoder(nn.Module):
         self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
         self.fc = nn.Linear(embedding_size, num_classes)
 
-    def forward(self, x):
+    def forward(self, x, lengths):
         # build src_key_padding_mask
-        x, lengths = pad_packed_sequence(x, batch_first=True)
+        x = x.cuda()
         batch_size = x.shape[0]
         max_seq_len = x.shape[1]
         padding_mask = torch.zeros(batch_size, max_seq_len + 1, dtype=torch.uint8)
         padding_mask[(torch.arange(batch_size), lengths)] = 1
         padding_mask = padding_mask.cumsum(dim=1)[:, :-1]
+        padding_mask = padding_mask > 0  # convert to BoolTensor
+        padding_mask = padding_mask.cuda()
 
         # convert to seq_len * batch_size * hidden
         x = x.transpose(0, 1)
@@ -57,11 +58,9 @@ class TransEncoder(nn.Module):
 
         # convert to batch_size * seq_len * hidden
         x = x.transpose(0, 1)
-        x = torch.mean(x, dim=1)
-        x = torch.flatten(x, 1)
         x = self.fc(x)
-        x = F.softmax(x, -1)
-        return x  # , padding_mask
+        x = F.log_softmax(x, -1)
+        return x, padding_mask
 
 
 def test():

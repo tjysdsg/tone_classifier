@@ -79,10 +79,10 @@ val_dataloader = DataLoader(
 model = ResNet34StatsPool(
     args.in_planes, args.embd_dim, dropout=args.dropout, total_step=args.epochs
 ).cuda()
-classifier = nn.Sequential(nn.Linear(args.embd_dim, NUM_CLASSES), nn.Softmax(dim=-1)).cuda()
+classifier = nn.Sequential(nn.Linear(args.embd_dim, NUM_CLASSES), nn.LogSoftmax(dim=-1)).cuda()
 
 # criterion, optimizer, scheduler
-criterion = nn.CrossEntropyLoss().cuda()
+criterion = nn.NLLLoss().cuda()
 lr = args.lr if args.lr else 0.1 * args.batch_size / 256
 optimizer = torch.optim.SGD(
     list(model.parameters()) + list(classifier.parameters()), lr=lr, momentum=args.momentum, weight_decay=args.wd
@@ -115,7 +115,7 @@ model = nn.DataParallel(model)
 def main():
     lr_change, total_lr_change = 0, 4
     for epoch in range(start_epoch, epochs):
-        losses, top1 = AverageMeter(), AverageMeter()
+        losses, acc = AverageMeter(), AverageMeter()
         model.train()
         classifier.train()
 
@@ -136,12 +136,11 @@ def main():
             loss.backward()
             optimizer.step()
 
-            prec1 = accuracy(outputs.data, label)
             losses.update(loss.data.item(), feats.size(0))
-            top1.update(prec1[0].data.item(), feats.size(0))
+            acc.update(accuracy(outputs.data, label), feats.size(0))
 
             # update progress bar
-            t.set_postfix(loss=losses.val, loss_avg=losses.avg, acc=top1.val, acc_avg=top1.avg,
+            t.set_postfix(loss=losses.val, loss_avg=losses.avg, acc=acc.val, acc_avg=acc.avg,
                           lr=get_lr(optimizer))
             t.update()
 
@@ -152,10 +151,10 @@ def main():
             torch.cuda.get_rng_state_all()
         )
 
-        acc = validate()
+        acc_val = validate()
         print(
             '\nEpoch %d\t  Loss %.4f\t  Accuracy %3.3f\t  lr %f\t  acc_val %3.3f\n'
-            % (epoch, losses.avg, top1.avg, get_lr(optimizer), acc)
+            % (epoch, losses.avg, acc.avg, get_lr(optimizer), acc_val)
         )
 
         last_lr = get_lr(optimizer)
@@ -183,7 +182,8 @@ def validate() -> float:
             ys.append(y)
             preds.append(torch.argmax(y_pred, dim=-1))
 
-            acc.update(accuracy(y_pred, y)[0].data.item(), y.size(0))
+            acc.update(accuracy(y_pred, y), y.size(0))
+
     ys = torch.cat(ys)
     preds = torch.cat(preds)
     print('Confusion Matrix:')

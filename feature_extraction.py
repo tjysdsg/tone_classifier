@@ -1,5 +1,3 @@
-import librosa
-import librosa.display
 import numpy as np
 import os
 from os.path import join as pjoin
@@ -25,6 +23,8 @@ def get_output_path(utt, phone, start, data_dir, postfix=''):
 
 
 def spectro(y, start: float, dur: float, sr=16000, fmin=50, fmax=350, hop_length=16):
+    import librosa
+
     # mel-spectrogram
     S = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=64, n_fft=2048, hop_length=hop_length, fmin=fmin, fmax=fmax)
     S = librosa.power_to_db(S, ref=np.max)

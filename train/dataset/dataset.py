@@ -13,17 +13,16 @@ def collate_fn_pad(batch):
     return x, y
 
 
-def collate_fn_pack_pad(batch):
-    transposed = list(zip(*batch))
-    x = transposed[0]
-    x_lens = [len(e) for e in x]
+def collate_sequential_embedding(batch):
+    transposed: list = list(zip(*batch))
+    x: list = transposed[0]  # (batch_size, seq_len, embd_size)
+    lengths = [len(e) for e in x]
 
-    y = transposed[1]
-    y = torch.from_numpy(np.asarray(y, dtype='int64'))
+    y = transposed[1]  # (batch_size, seq_len)
     x = pad_sequence(x, batch_first=True)
+    y = pad_sequence(y, batch_first=True, padding_value=-100)  # -100 is ignored by NLLLoss
 
-    packed = pack_padded_sequence(x, x_lens, batch_first=True, enforce_sorted=False)
-    return packed, y
+    return x, torch.as_tensor(y, dtype=torch.long), lengths
 
 
 class SpectrogramDataset(Dataset):
@@ -42,30 +41,42 @@ class SpectrogramDataset(Dataset):
         return signal, self.utt2label[utt]
 
 
-class EmbeddingDataset(Dataset):
+class SequentialEmbeddingDataset(Dataset):
     def __init__(self, utts: list, utt2tones: dict, embd_model):
         self.utts = utts
         self.utt2tones = utt2tones
         self.embd_model = embd_model
 
+        self.sequences = []
+        for utt in self.utts:
+            data = self.utt2tones[utt]
+            n = len(data)
+            for i in range(n):
+                data[i].append(utt)
+            self.sequences.append(data)
+
     def __len__(self):
-        return len(self.utts)
+        return len(self.sequences)
 
     def __getitem__(self, idx):
         from feature_extraction import get_output_path
-        utt = self.utts[idx]
-        data = self.utt2tones[utt]
-        y = []
-        x = []
-        for tone, phone, start, dur in data:
+        seq = self.sequences[idx]
+
+        xs = []
+        ys = []
+        for tone, phone, start, dur, utt in seq:
             path = get_output_path(utt, phone, start, f'feats/{tone}')
-            signal = np.load(path, allow_pickle=False)
-            signal = np.moveaxis(signal, 0, 1)
-            signal = torch.from_numpy(signal.astype('float32'))
-            signal = signal.unsqueeze(0)
-            embd = self.embd_model(signal)
-            y.append(tone)
-            x.append(embd)
-        y = torch.from_numpy(np.asarray(y, dtype='int64'))
-        x = torch.stack(x, dim=0)
-        return x, y
+            x = np.load(path, allow_pickle=False)
+            x = np.moveaxis(x, 0, 1)
+            x = torch.as_tensor(x, dtype=torch.float32)  # seq_len * embd_size
+
+            x = torch.unsqueeze(x, 0)  # 1 * seq_len * embd_size
+            x = self.embd_model(x)
+            x = torch.squeeze(x, 0)  # seq_len * embd_size
+
+            xs.append(x)
+            ys.append(tone)
+
+        # xs: (seq_len, embd_size)
+        # ys: (seq_len,)
+        return torch.stack(xs), torch.as_tensor(ys, dtype=torch.long)

@@ -3,7 +3,7 @@ from sklearn.model_selection import train_test_split
 import json
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-from train.dataset.dataset import EmbeddingDataset, collate_fn_pack_pad
+from train.dataset.dataset import EmbeddingDataset, collate_sequential_embedding
 from train.modules.lstm import LSTMNet
 from ignite.engine import Events, create_supervised_trainer, create_supervised_evaluator
 from ignite.metrics import Accuracy, Loss
@@ -49,13 +49,13 @@ utts_train, utts_val = train_test_split(utts_train, test_size=0.1)
 # train dataset
 train_loader = DataLoader(
     EmbeddingDataset(utts_train, utt2tones, embd_model), batch_size=args.batch_size, num_workers=args.workers,
-    pin_memory=True, collate_fn=collate_fn_pack_pad,
+    pin_memory=True, collate_fn=collate_sequential_embedding,
 )
 
 # val dataset
 val_loader = DataLoader(
     EmbeddingDataset(utts_val, utt2tones, embd_model), batch_size=args.batch_size, num_workers=args.workers,
-    pin_memory=True, collate_fn=collate_fn_pack_pad,
+    pin_memory=True, collate_fn=collate_sequential_embedding,
 )
 
 # model, optimizer, criterion, scheduler, trainer

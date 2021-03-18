@@ -1,4 +1,3 @@
-#! /usr/bin/env python3
 import os
 import torch
 import numpy as np
@@ -65,20 +64,32 @@ class AverageMeter(object):
         self.avg = self.sum / self.count
 
 
-def accuracy(output, target, topk=(1,)):
-    """Computes the precision@k for the specified values of k"""
-    maxk = max(topk)
-    batch_size = target.size(0)
+def accuracy(output, target) -> float:
+    total = 0
+    correct = 0
+    _, predicted = torch.max(output.data, 1)
+    total += target.size(0)
+    correct += (predicted == target).sum().item()
+    return correct / total
 
-    _, pred = output.topk(maxk, 1, True, True)
-    pred = pred.t()
-    correct = pred.eq(target.view(1, -1).expand_as(pred))
 
-    res = []
-    for k in topk:
-        correct_k = correct[:k].view(-1).float().sum(0, keepdim=True)
-        res.append(correct_k.mul_(100.0 / batch_size))
-    return res
+def masked_accuracy(output, target, padding_mask) -> float:
+    total = 0
+    correct = 0
+    batch_size = output.size(0)
+    for i in range(batch_size):
+        o = output[i]
+        t = target[i]
+        mask = padding_mask[i]
+
+        _, pred = torch.max(o.data, 1)
+        pred[mask] = 0
+        t[mask] = -1
+
+        total += t.size(0) - mask.sum().item()
+        correct += (pred == t).sum().item()
+
+    return correct / total
 
 
 def change_lr(optimizer, lr):
@@ -98,3 +109,31 @@ def separate_resnet_bn_paras(modules):
     paras_wo_bn = list(filter(lambda p: id(p) not in paras_only_bn_id, all_parameters))
 
     return paras_only_bn, paras_wo_bn
+
+
+if __name__ == '__main__':
+    y_pred = torch.as_tensor(
+        [
+            [[0.3, 0.7], [0.7, 0.3], [0.3, 0.7]],
+            [[0.3, 0.7], [0.3, 0.7], [0.7, 0.3]],
+            [[0.3, 0.7], [0.3, 0.7], [0.3, 0.7]]
+        ], dtype=torch.float
+    )
+    y = torch.as_tensor(
+        [
+            [1, 0, 1],
+            [1, 0, 0],
+            [1, 0, 0],
+        ],
+        dtype=torch.long
+    )
+    mask = torch.as_tensor(
+        [
+            [True, True, True],
+            [True, True, False],
+            [True, False, False],
+        ],
+        dtype=torch.bool
+    )
+
+    assert masked_accuracy(y_pred, y, ~mask) == 5 / 6
