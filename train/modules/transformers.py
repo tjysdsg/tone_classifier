@@ -10,7 +10,7 @@ class PositionalEncoding(nn.Module):
     (seq_len, batch_size, feature_size)
     """
 
-    def __init__(self, d_model, dropout=0.1, max_len=50):
+    def __init__(self, d_model, max_len: int, dropout=0.1):
         super().__init__()
         self.dropout = nn.Dropout(p=dropout)
 
@@ -33,10 +33,10 @@ class TransEncoder(nn.Module):
     Batch-first Transformer encoder
     """
 
-    def __init__(self, num_classes: int, num_layers=6, embedding_size=128, nhead=8):
+    def __init__(self, num_classes: int, num_layers=6, embedding_size=128, nhead=8, max_len=100):
         super().__init__()
         encoder_layer = nn.TransformerEncoderLayer(d_model=embedding_size, nhead=nhead)
-        self.pos_enc = PositionalEncoding(embedding_size)
+        self.pos_enc = PositionalEncoding(embedding_size, max_len=max_len)
         self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
         self.fc = nn.Linear(embedding_size, num_classes)
 
