@@ -37,7 +37,7 @@ set_seed(args.seed)
 
 def load_embedding_model(epoch: int):
     print(f'loading exp/embedding/model_{epoch}.pkl')
-    model = ResNet34StatsPool(IN_PLANES, EMBD_DIM).cuda()
+    model = ResNet34StatsPool(IN_PLANES, EMBD_DIM)
     checkpoint = torch.load(f'exp/embedding/model_{epoch}.pkl')
     model.load_state_dict(checkpoint['model'])
     return model
