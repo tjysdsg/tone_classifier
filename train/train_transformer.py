@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from train.dataset.dataset import SequentialEmbeddingDataset, collate_sequential_embedding
 from train.modules.transformers import TransEncoder
-from train.utils import set_seed, AverageMeter, masked_accuracy, save_checkpoint, save_ramdom_state, get_lr
+from train.utils import set_seed, AverageMeter, masked_accuracy, save_transformer_checkpoint, get_lr
 import torch
 import torch.nn as nn
 from train.modules.model_spk import ResNet34StatsPool
@@ -74,9 +74,18 @@ optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.8)
 criterion = nn.NLLLoss(ignore_index=-100, reduction='sum').cuda()
 scheduler = ReduceLROnPlateau(optimizer, patience=4, verbose=True)
 
+# load previous model if resume
+epochs, start_epoch = args.epochs, args.start_epoch
+if start_epoch != 0:
+    print(f'Load exp/{SAVE_DIR}/model_{start_epoch - 1}.pkl')
+    checkpoint = torch.load(f'exp/{SAVE_DIR}/model_{start_epoch - 1}.pkl')
+    model.load_state_dict(checkpoint['model'])
+    optimizer.load_state_dict(checkpoint['optimizer'])
+    scheduler.load_state_dict(checkpoint['scheduler'])
+
 
 def main():
-    for epoch in range(500):
+    for epoch in range(start_epoch, epochs):
         losses, acc = AverageMeter(), AverageMeter()
         model.train()
 
@@ -104,11 +113,7 @@ def main():
                           lr=get_lr(optimizer))
             t.update()
 
-        # TODO: save_checkpoint(f'exp/{SAVE_DIR}', epoch, model, classifier, optimizer, scheduler)
-        # TODO: save_ramdom_state(
-        #     f'exp/{SAVE_DIR}', random.getstate(), np.random.get_state(), torch.get_rng_state(),
-        #     torch.cuda.get_rng_state_all()
-        #  )
+        save_transformer_checkpoint(f'exp/{SAVE_DIR}', epoch, model, optimizer, scheduler)
 
         acc_val = validate()
         print(
