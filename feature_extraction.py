@@ -7,8 +7,6 @@ import sys
 import argparse
 from multiprocessing import Process
 
-# TODO: Speed perturb
-
 data_root = '/NASdata/AudioData/mandarin/AISHELL-2/iOS/data/wav/'
 # 声母
 INITIALS = ['b', 'c', 'ch', 'd', 'f', 'g', 'h', 'j', 'k', 'l', 'm', 'n', 'p', 'q', 'r', 's', 'sh', 't', 'w', 'x', 'y',

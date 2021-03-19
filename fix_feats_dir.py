@@ -9,17 +9,31 @@ To avoid renaming all the files and strings, 'speaker' means tone index (0 = 1st
 """
 
 import os
+import numpy as np
 
 DATA_DIR = 'feats'
 TONES = list(range(5))
 
 
 def main():
-    data = []
+    tone_data = {t: [] for t in TONES}
     for t in TONES:
         for f in os.scandir(os.path.join(DATA_DIR, str(t))):
             path = f.path
             filename = f.name
+
+            if 'noise' in filename or 'sp' in filename:
+                # not including augmented data, they're only used in pytorch data loading
+                continue
+
+            tone_data[t].append([filename, path])
+
+    min_len = np.min([len(v) for k, v in tone_data.items()])
+    print(f'Balanced data size of each tone is {min_len}')
+
+    data = []
+    for t in TONES:
+        for filename, path in tone_data[t]:
             data.append([filename, path, t])
 
     from sklearn.model_selection import train_test_split
