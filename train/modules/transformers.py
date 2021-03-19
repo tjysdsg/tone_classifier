@@ -59,7 +59,6 @@ class TransEncoder(nn.Module):
         # convert to batch_size * seq_len * hidden
         x = x.transpose(0, 1)
         x = self.fc(x)
-        x = F.log_softmax(x, -1)
         return x, padding_mask
 
 

@@ -1,4 +1,5 @@
 import numpy as np
+import os
 import torch
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import Dataset
@@ -80,41 +81,28 @@ class SequentialSpectrogramDataset(Dataset):
 
 
 class SequentialEmbeddingDataset(Dataset):
-    def __init__(self, utts: list, utt2tones: dict, embd_model):
+    def __init__(self, utts: list, utt2tones: dict, embedding_dir='embeddings'):
         self.utts = utts
         self.utt2tones = utt2tones
-        self.embd_model = embd_model
+        self.embedding_dir = embedding_dir
 
         self.sequences = []
         for utt in self.utts:
             data = self.utt2tones[utt]
-            n = len(data)
-            for i in range(n):
-                data[i].append(utt)
-            self.sequences.append(data)
+            self.sequences.append((utt, data))
 
     def __len__(self):
         return len(self.sequences)
 
     def __getitem__(self, idx):
-        from feature_extraction import get_output_path
-        seq = self.sequences[idx]
+        utt, seq = self.sequences[idx]
+        path = os.path.join(self.embedding_dir, f'{utt}.npy')
+        embeddings = np.load(path, allow_pickle=False)
+        xs = embeddings[:len(seq)]
 
-        xs = []
         ys = []
-        for tone, phone, start, dur, utt in seq:
-            path = get_output_path(utt, phone, start, f'feats/{tone}')
-            x = np.load(path, allow_pickle=False)
-            x = np.moveaxis(x, 0, 1)
-            x = torch.as_tensor(x, dtype=torch.float32)  # seq_len * embd_size
-
-            x = torch.unsqueeze(x, 0)  # 1 * seq_len * embd_size
-            x = self.embd_model(x)
-            x = torch.squeeze(x, 0)  # seq_len * embd_size
-
-            xs.append(x)
+        for tone, phone, start, dur in seq:
             ys.append(tone)
 
-        # xs: (seq_len, embd_size)
-        # ys: (seq_len,)
-        return torch.stack(xs), torch.as_tensor(ys, dtype=torch.long)
+        # (seq_len, embd_size) and (seq_len,)
+        return torch.as_tensor(xs, dtype=torch.float32), torch.as_tensor(ys, dtype=torch.long)
