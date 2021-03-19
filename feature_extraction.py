@@ -179,7 +179,6 @@ def collect_stats():
 
             # triphone
             # NOTE: don't change the value of dur, it's the true duration of this phone
-            # FIXME: what to do when no previous phone
             if utt != prev_utt:
                 utt2time[utt].append([start, dur, tone])
             else:

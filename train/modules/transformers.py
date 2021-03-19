@@ -1,7 +1,6 @@
 import torch
 import math
 import torch.nn as nn
-import torch.nn.functional as F
 
 
 class PositionalEncoding(nn.Module):
@@ -40,7 +39,7 @@ class TransEncoder(nn.Module):
         self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
         self.fc = nn.Linear(embedding_size, num_classes)
 
-    def forward(self, x, lengths):
+    def forward(self, x, lengths):  # FIXME: lengths has different size than x if training on multiple GPUs
         # build src_key_padding_mask
         x = x.cuda()
         batch_size = x.shape[0]
