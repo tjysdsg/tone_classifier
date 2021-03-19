@@ -11,6 +11,8 @@ data_root = '/NASdata/AudioData/mandarin/AISHELL-2/iOS/data/wav/'
 # 声母
 INITIALS = ['b', 'c', 'ch', 'd', 'f', 'g', 'h', 'j', 'k', 'l', 'm', 'n', 'p', 'q', 'r', 's', 'sh', 't', 'w', 'x', 'y',
             'z', 'zh']
+OUTDIR = 'feats'
+EXISTING_FILES = {t: [] for t in range(5)}
 
 
 def get_output_path(utt, phone, start, data_dir, postfix=''):
@@ -48,15 +50,18 @@ def extract_feature(tone: int, utt: str, phone: str, start: float, dur: float):
     import librosa
     spk = utt[1:6]
 
-    outdir = os.path.join('feats', f'{tone}')
+    outdir = os.path.join(OUTDIR, f'{tone}')
     os.makedirs(outdir, exist_ok=True)
-
-    outpath = get_output_path(utt, phone, start, outdir)
     input_path = pjoin(data_root, spk, f'{utt}.wav')
+    existing = EXISTING_FILES[tone]
+    y = None
 
     # original
-    if not os.path.exists(outpath):
-        y, _ = librosa.load(input_path, sr=16000)
+    outpath = get_output_path(utt, phone, start, outdir)
+    if outpath not in existing:
+        if y is None:
+            y, _ = librosa.load(input_path, sr=16000)
+
         S = spectro(y, start, dur)
         save_spectro_to_file(S, outpath)
     else:
@@ -64,10 +69,12 @@ def extract_feature(tone: int, utt: str, phone: str, start: float, dur: float):
         print(f"Skipping {outpath}", end='\r')
 
     # add random noise
-    from aug import add_random_noise
+    from aug import add_random_noise, speed_perturb
     outpath_noise = get_output_path(utt, phone, start, outdir, postfix='noise')
-    if not os.path.exists(outpath_noise):
-        y, _ = librosa.load(input_path, sr=16000)
+    if outpath_noise not in existing:
+        if y is None:
+            y, _ = librosa.load(input_path, sr=16000)
+
         snr = random.uniform(50, 60)
         y_noise = add_random_noise(y, snr)
         S = spectro(y_noise, start, dur)
@@ -77,11 +84,12 @@ def extract_feature(tone: int, utt: str, phone: str, start: float, dur: float):
         print(f"Skipping {outpath_noise}", end='\r')
 
     # speed perturb
-    from aug import speed_perturb
     outpath_sp09 = get_output_path(utt, phone, start, outdir, postfix='sp09')
     outpath_sp11 = get_output_path(utt, phone, start, outdir, postfix='sp11')
-    if not os.path.exists(outpath_sp09):
-        y, _ = librosa.load(input_path, sr=16000)
+    if outpath_sp09 not in existing:
+        if y is None:
+            y, _ = librosa.load(input_path, sr=16000)
+
         y_sp09, y_sp11 = speed_perturb(y)
 
         S = spectro(y_sp09, start / 0.9, dur / 0.9)
@@ -227,6 +235,16 @@ def main():
         collect_stats()
     else:
         print("Loading...")
+
+        # find existing files
+        # os.path.exists() is slow when the directory contains large amount of files
+        for t in range(5):
+            folder = os.path.join(OUTDIR, f'{t}')
+            os.makedirs(folder, exist_ok=True)
+            paths = [d.path for d in os.scandir(folder)]
+            EXISTING_FILES[t] = set(paths)
+
+        # load stage 1 output
         n_jobs = 16
         utt2tones: dict = json.load(open('utt2tones.json'))
         utts = list(utt2tones.keys())
