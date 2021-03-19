@@ -1,11 +1,8 @@
-import os
 import random
 import librosa
 import numpy as np
-import scipy.io.wavfile as sciwav
 from scipy.signal import fftconvolve
 import sox
-import soundfile
 
 noise_list_file = '/Netdata/2017/qinxy/ASV/DeepSpeaker/egs/ffsvc/data/envir/noise_wav_list'
 noise_list = []
@@ -32,7 +29,7 @@ def norm_speech(y):
 
 
 def add_noise(y, noise, snr):
-    # make sure signal, noise_signal shoud have the same len
+    # make sure signal, noise_signal have the same len
     l = y.shape[0]
     if noise.shape[0] == l:
         offset = 0

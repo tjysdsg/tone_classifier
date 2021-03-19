@@ -1,4 +1,5 @@
 import numpy as np
+import random
 import os
 from os.path import join as pjoin
 import json
@@ -53,42 +54,46 @@ def extract_feature(tone: int, utt: str, phone: str, start: float, dur: float):
     os.makedirs(outdir, exist_ok=True)
 
     outpath = get_output_path(utt, phone, start, outdir)
-    outpath_noise = get_output_path(utt, phone, start, outdir, postfix='noise')
     input_path = pjoin(data_root, spk, f'{utt}.wav')
 
-    try:
-        # TODO: Remove this after done
-        #  Fix old path having too many digits in `start`:
-        oldpath = pjoin(outdir, f"{utt}_{phone}_{start}.npy")
-        if os.path.exists(oldpath):
-            os.rename(oldpath, outpath)
-            sys.stdout.write("\033[K")
-            print(f"Renaming {oldpath} to {outpath}", end='\r')
-
-        # original
-        if not os.path.exists(outpath):
-            y, _ = librosa.load(input_path, sr=16000)
-            S = spectro(y, start, dur)
-            save_spectro_to_file(S, outpath)
-        else:
-            sys.stdout.write("\033[K")
-            print(f"Skipping {outpath}", end='\r')
-
-        # TODO: data augmentation
-        # add random noise
-        # from aug import add_random_noise
-        # if not os.path.exists(outpath_noise):
-        #     y, _ = librosa.load(input_path, sr=16000)
-        #     snr = random.uniform(50, 60)
-        #     y_noise = add_random_noise(y, snr)
-        #     S = spectro(y_noise, start, dur)
-        #     save_spectro_to_file(S, outpath_noise)
-        # else:
-        #     sys.stdout.write("\033[K")
-        #     print(f"Skipping {outpath_noise}", end='\r')
-    except Exception as e:
+    # original
+    if not os.path.exists(outpath):
+        y, _ = librosa.load(input_path, sr=16000)
+        S = spectro(y, start, dur)
+        save_spectro_to_file(S, outpath)
+    else:
         sys.stdout.write("\033[K")
-        print(f"WARNING: {utt} failed\n{e}")
+        print(f"Skipping {outpath}", end='\r')
+
+    # add random noise
+    from aug import add_random_noise
+    outpath_noise = get_output_path(utt, phone, start, outdir, postfix='noise')
+    if not os.path.exists(outpath_noise):
+        y, _ = librosa.load(input_path, sr=16000)
+        snr = random.uniform(50, 60)
+        y_noise = add_random_noise(y, snr)
+        S = spectro(y_noise, start, dur)
+        save_spectro_to_file(S, outpath_noise)
+    else:
+        sys.stdout.write("\033[K")
+        print(f"Skipping {outpath_noise}", end='\r')
+
+    # speed perturb
+    from aug import speed_perturb
+    outpath_sp09 = get_output_path(utt, phone, start, outdir, postfix='sp09')
+    outpath_sp11 = get_output_path(utt, phone, start, outdir, postfix='sp11')
+    if not os.path.exists(outpath_sp09):
+        y, _ = librosa.load(input_path, sr=16000)
+        y_sp09, y_sp11 = speed_perturb(y)
+
+        S = spectro(y_sp09, start / 0.9, dur / 0.9)
+        save_spectro_to_file(S, outpath_sp09)
+
+        S = spectro(y_sp11, start / 1.1, dur / 1.1)
+        save_spectro_to_file(S, outpath_sp11)
+    else:
+        sys.stdout.write("\033[K")
+        print(f"Skipping {outpath_sp09} and {outpath_sp11}", end='\r')
 
 
 def worker(utt2tones: dict, utt):
