@@ -1,4 +1,5 @@
 import torch
+from tqdm import tqdm
 import numpy as np
 import os
 from torch.utils.data import DataLoader
@@ -13,7 +14,7 @@ torch.multiprocessing.set_sharing_strategy('file_system')  # https://github.com/
 EMBD_DIM = 128
 IN_PLANES = 16
 BATCH_SIZE = 64
-EMBD_MODEL_EPOCH = 7
+EMBD_MODEL_EPOCH = 78
 OUT_DIR = 'embeddings'
 
 embd_model = load_embedding_model(EMBD_MODEL_EPOCH, IN_PLANES, EMBD_DIM).cuda()
@@ -31,6 +32,7 @@ os.makedirs(OUT_DIR, exist_ok=True)
 
 
 def main():
+    t = tqdm(iterable=False, total=float('inf'))
     for i, (utts, xs, ys) in enumerate(loader):
         n = len(xs)
         for j in range(n):
@@ -38,10 +40,9 @@ def main():
 
             output_path = os.path.join(OUT_DIR, f'{utt}.npy')
             if os.path.exists(output_path):
-                print(f'Skipping {utt}')
+                t.set_postfix(skipped=utt)
+                t.update()
                 continue
-
-            print(f'Calculating embedding for {utt}')
 
             x = xs[j]  # (seq_len, n_frames, mels)
             # y = ys[j]  # (seq_len, )
@@ -49,6 +50,9 @@ def main():
             x = torch.nn.utils.rnn.pad_sequence(x, batch_first=True).cuda()
             embedding = embd_model(x).cpu().numpy()
             np.save(output_path, embedding)
+
+            t.set_postfix(now=utt)
+            t.update()
 
 
 if __name__ == '__main__':

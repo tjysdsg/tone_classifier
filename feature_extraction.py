@@ -46,6 +46,7 @@ def save_spectro_to_file(S, output_path: str):
 
 
 def extract_feature(tone: int, utt: str, phone: str, start: float, dur: float):
+    import librosa
     spk = utt[1:6]
 
     outdir = os.path.join('feats', f'{tone}')
