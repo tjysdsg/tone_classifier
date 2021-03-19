@@ -13,7 +13,7 @@ torch.multiprocessing.set_sharing_strategy('file_system')  # https://github.com/
 EMBD_DIM = 128
 IN_PLANES = 16
 BATCH_SIZE = 64
-EMBD_MODEL_EPOCH = 121
+EMBD_MODEL_EPOCH = 7
 OUT_DIR = 'embeddings'
 
 embd_model = load_embedding_model(EMBD_MODEL_EPOCH, IN_PLANES, EMBD_DIM).cuda()

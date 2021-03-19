@@ -2,7 +2,7 @@ import argparse
 from tqdm import trange
 import numpy as np
 from train.utils import set_seed
-from sklearn.metrics import confusion_matrix
+from sklearn.metrics import confusion_matrix, accuracy_score
 import os
 import random
 import torch
@@ -21,17 +21,10 @@ parser = argparse.ArgumentParser(description='Deep Speaker Embedding, SGD, Reduc
 # dataset
 parser.add_argument('--data_dir', default='feats', type=str)
 parser.add_argument('--data_name', default='train', type=str)
-parser.add_argument('--dur_range', default=[2, 4], nargs='+', type=int)
 parser.add_argument('-j', '--workers', default=20, type=int)
 parser.add_argument('-b', '--batch_size', default=64, type=int)
-parser.add_argument('--spk_per_batch', default=64, type=int)
-
-# data augmentation
-parser.add_argument('--data_aug', default=True, type=bool)
-parser.add_argument('--snr_range', default=[0, 20], nargs='+', type=int)
-# validation dataset
 parser.add_argument('--val_data_name', default='val', type=str)
-parser.add_argument('--val_dur_range', default=[8, 8], nargs='+', type=int)
+parser.add_argument('--test_data_name', default='test', type=str)
 # model backbone
 parser.add_argument('--in_planes', default=16, type=int)
 parser.add_argument('--embd_dim', default=128, type=int)
@@ -43,9 +36,8 @@ parser.add_argument('--wd', '--weight_decay', default=1e-4, type=float)
 parser.add_argument('--lr', default=None, type=float)
 parser.add_argument('--warm_up_epoch', default=3, type=int)
 parser.add_argument('--lr_patience', default=4, type=int)
-# loss type
-parser.add_argument('--loss_type', default='CrossEntropy', type=str)
 # others
+parser.add_argument('action', type=str, default='train', nargs='?')
 parser.add_argument('--epochs', default=500, type=int)
 parser.add_argument('--start_epoch', default=0, type=int)
 parser.add_argument('--seed', default=3007123, type=int)
@@ -55,25 +47,20 @@ args = parser.parse_args()
 os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
 set_seed(args.seed)
 
-# training dataset
-utt2wav = [line.split() for line in open(f'feats/{args.data_name}/wav.scp')]
-spk2utt = {int(line.split()[0]): line.split()[1:] for line in open(f'{args.data_dir}/{args.data_name}/spk2utt')}
-utt2spk = {line.split()[0]: int(line.split()[1]) for line in open(f'{args.data_dir}/{args.data_name}/utt2spk')}
 
-dataset = SpectrogramDataset(utt2wav, utt2spk)
-train_loader = DataLoader(
-    dataset, batch_size=args.batch_size, num_workers=args.workers, pin_memory=True,
-    collate_fn=collate_fn_pad
-)
+def create_dataloader(data_dir):
+    wavscp = [line.split() for line in open(os.path.join(data_dir, 'wav.scp'))]
+    utt2spk = {line.split()[0]: int(line.split()[1]) for line in open(os.path.join(data_dir, 'utt2spk'))}
+    return DataLoader(
+        SpectrogramDataset(wavscp, utt2spk), batch_size=args.batch_size, num_workers=args.workers,
+        pin_memory=True, collate_fn=collate_fn_pad,
+    )
 
-# validation dataset
-val_wavscp = [line.split() for line in open(f'feats/{args.val_data_name}/wav.scp')]
-val_utt2spk = {line.split()[0]: line.split()[1] for line in open(f'feats/{args.val_data_name}/utt2spk')}
-val_dataset = SpectrogramDataset(val_wavscp, val_utt2spk)
-val_dataloader = DataLoader(
-    val_dataset, batch_size=args.batch_size, num_workers=args.workers, pin_memory=True,
-    collate_fn=collate_fn_pad
-)
+
+# data loaders
+train_loader = create_dataloader(f'feats/{args.data_name}')
+val_dataloader = create_dataloader(f'feats/{args.val_data_name}')
+test_dataloader = create_dataloader(f'feats/{args.test_data_name}')
 
 # models
 model = ResNet34StatsPool(
@@ -112,7 +99,7 @@ else:
 model = nn.DataParallel(model)
 
 
-def main():
+def train():
     lr_change, total_lr_change = 0, 4
     for epoch in range(start_epoch, epochs):
         losses, acc = AverageMeter(), AverageMeter()
@@ -168,11 +155,10 @@ def main():
 
 
 def validate() -> float:
-    print('=' * 25)
+    print('============== VALIDATING ==============')
     model.eval()
     classifier.eval()
 
-    acc = AverageMeter()
     ys = []
     preds = []
     with torch.no_grad():
@@ -182,15 +168,40 @@ def validate() -> float:
             ys.append(y)
             preds.append(torch.argmax(y_pred, dim=-1))
 
-            acc.update(accuracy(y_pred, y), y.size(0))
-
     ys = torch.cat(ys)
     preds = torch.cat(preds)
     print('Confusion Matrix:')
     print(confusion_matrix(ys.numpy(), preds.numpy()))
 
-    return acc.avg
+    return accuracy_score(ys.numpy(), preds.numpy())
+
+
+def test():
+    print('============== TESTING ==============')
+    model.eval()
+    classifier.eval()
+
+    ys = []
+    preds = []
+    with torch.no_grad():
+        for j, (x, y) in enumerate(test_dataloader):
+            y = y.cpu()
+            y_pred = classifier(model(x)).cpu()
+            ys.append(y)
+            preds.append(torch.argmax(y_pred, dim=-1))
+
+    ys = torch.cat(ys)
+    preds = torch.cat(preds)
+
+    print(f'Accuracy: {accuracy_score(ys.numpy(), preds.numpy())}')
+    print('Confusion Matrix:')
+    print(confusion_matrix(ys.numpy(), preds.numpy()))
 
 
 if __name__ == '__main__':
-    main()
+    if args.action == 'train':
+        train()
+    elif args.action == 'test':
+        test()
+    else:
+        raise RuntimeError(f"Unknown action: {args.action}")
