@@ -40,7 +40,7 @@ args = parser.parse_args()
 
 set_seed(args.seed)
 
-logger = create_logger('train_embedding', f'feats/{SAVE_DIR}/{args.action}_{args.start_epoch}.log')
+logger = create_logger('train_embedding', f'exp/{SAVE_DIR}/{args.action}_{args.start_epoch}.log')
 
 
 def create_dataloader(data_dir):

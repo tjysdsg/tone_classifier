@@ -32,7 +32,7 @@ class TransEncoder(nn.Module):
     Batch-first Transformer encoder
     """
 
-    def __init__(self, num_classes: int, num_layers=6, embedding_size=128, nhead=8, max_len=100):
+    def __init__(self, num_classes: int, num_layers=12, embedding_size=128, nhead=8, max_len=100):
         super().__init__()
         encoder_layer = nn.TransformerEncoderLayer(d_model=embedding_size, nhead=nhead)
         self.pos_enc = PositionalEncoding(embedding_size, max_len=max_len)

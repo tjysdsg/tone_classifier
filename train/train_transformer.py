@@ -18,6 +18,7 @@ SAVE_DIR = 'transformer'
 os.makedirs(f'exp/{SAVE_DIR}', exist_ok=True)
 
 parser = argparse.ArgumentParser(description='Train embedding on transformer')
+parser.add_argument('action', type=str, default='train', nargs='?')
 parser.add_argument('--data_dir', default='feats', type=str)
 parser.add_argument('--data_name', default='train', type=str)
 parser.add_argument('-j', '--workers', default=20, type=int)
@@ -31,7 +32,7 @@ args = parser.parse_args()
 
 set_seed(args.seed)
 
-logger = create_logger('train_transformer', f'feats/{SAVE_DIR}/{args.action}_{args.start_epoch}.log')
+logger = create_logger('train_transformer', f'exp/{SAVE_DIR}/{args.action}_{args.start_epoch}.log')
 
 utt2tones = json.load(open('utt2tones_fixed.json'))
 utts = list(utt2tones.keys())
