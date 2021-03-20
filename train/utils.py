@@ -23,18 +23,6 @@ def set_seed(seed):
     torch.cuda.manual_seed_all(seed)
 
 
-def load_embedding_model(epoch: int, in_planes: int, embd_dim: int):
-    print(f'loading exp/embedding/model_{epoch}.pkl')
-    model = ResNet34StatsPool(in_planes, embd_dim)
-    checkpoint = torch.load(f'exp/embedding/model_{epoch}.pkl')
-    model.load_state_dict(checkpoint['model'])
-    model.eval()
-
-    for param in model.parameters():
-        param.requires_grad = False
-    return model
-
-
 def get_lr(optimizer):
     for param_group in optimizer.param_groups:
         return param_group['lr']
@@ -117,20 +105,6 @@ def masked_accuracy(output, target, padding_mask) -> float:
 def change_lr(optimizer, lr):
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
-
-
-def separate_resnet_bn_paras(modules):
-    all_parameters = modules.parameters()
-    paras_only_bn = []
-
-    for pname, p in modules.named_parameters():
-        if pname.find('bn') >= 0:
-            paras_only_bn.append(p)
-
-    paras_only_bn_id = list(map(id, paras_only_bn))
-    paras_wo_bn = list(filter(lambda p: id(p) not in paras_only_bn_id, all_parameters))
-
-    return paras_only_bn, paras_wo_bn
 
 
 if __name__ == '__main__':

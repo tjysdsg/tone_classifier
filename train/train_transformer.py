@@ -11,10 +11,7 @@ from train.modules.transformers import TransEncoder
 from train.utils import (set_seed, AverageMeter, masked_accuracy, save_transformer_checkpoint, get_lr)
 import torch
 import torch.nn as nn
-
-EMBD_DIM = 128
-IN_PLANES = 16
-NUM_CLASSES = 5
+from train.config import NUM_CLASSES, EMBD_DIM, IN_PLANES
 
 # create output dir
 SAVE_DIR = 'transformer'
