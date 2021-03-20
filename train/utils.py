@@ -1,5 +1,7 @@
 import os
+import sys
 import torch
+import logging
 import numpy as np
 import random
 from train.modules.model_spk import ResNet34StatsPool
@@ -105,6 +107,21 @@ def masked_accuracy(output, target, padding_mask) -> float:
 def change_lr(optimizer, lr):
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
+
+
+def create_logger(name: str, log_file: str) -> logging.Logger:
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.INFO)
+
+    formatter = logging.Formatter(fmt='[%(levelname)s] %(asctime)s: %(message)s', datefmt='%Y-%m-%d-%H-%M-%S')
+
+    file_handler = logging.FileHandler(log_file)
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+    stdout_handler = logging.StreamHandler(sys.stdout)
+    stdout_handler.setFormatter(formatter)
+    logger.addHandler(stdout_handler)
+    return logger
 
 
 if __name__ == '__main__':

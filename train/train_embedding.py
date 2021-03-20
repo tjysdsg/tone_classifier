@@ -1,7 +1,10 @@
 import argparse
 from tqdm import trange
 import numpy as np
-from train.utils import set_seed
+from train.utils import (
+    set_seed, create_logger, AverageMeter, accuracy, save_checkpoint, save_ramdom_state, get_lr,
+    change_lr
+)
 from sklearn.metrics import confusion_matrix, accuracy_score
 import os
 import random
@@ -10,7 +13,6 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from train.modules.model_spk import ResNet34StatsPool
 from train.dataset.dataset import SpectrogramDataset, collate_fn_pad
-from utils import AverageMeter, accuracy, save_checkpoint, save_ramdom_state, get_lr, change_lr
 from train.config import NUM_CLASSES, EMBD_DIM, IN_PLANES
 
 # create output dir
@@ -37,6 +39,8 @@ parser.add_argument('--seed', default=3007123, type=int)
 args = parser.parse_args()
 
 set_seed(args.seed)
+
+logger = create_logger('train_embedding', f'feats/{SAVE_DIR}/{args.action}_{args.start_epoch}.log')
 
 
 def create_dataloader(data_dir):
@@ -131,7 +135,7 @@ def train():
         )
 
         acc_val = validate()
-        print(
+        logger.info(
             '\nEpoch %d\t  Loss %.4f\t  Accuracy %3.3f\t  lr %f\t  acc_val %3.3f\n'
             % (epoch, losses.avg, acc.avg, get_lr(optimizer), acc_val)
         )
@@ -140,7 +144,7 @@ def train():
 
 
 def validate() -> float:
-    print('============== VALIDATING ==============')
+    logger.info('============== VALIDATING ==============')
     model.eval()
     classifier.eval()
 
@@ -155,14 +159,14 @@ def validate() -> float:
 
     ys = torch.cat(ys)
     preds = torch.cat(preds)
-    print('Confusion Matrix:')
-    print(confusion_matrix(ys.numpy(), preds.numpy()))
+    logger.info('Confusion Matrix:')
+    logger.info(confusion_matrix(ys.numpy(), preds.numpy()))
 
     return accuracy_score(ys.numpy(), preds.numpy())
 
 
 def test():
-    print('============== TESTING ==============')
+    logger.info('============== TESTING ==============')
     model.eval()
     classifier.eval()
 
@@ -178,9 +182,9 @@ def test():
     ys = torch.cat(ys)
     preds = torch.cat(preds)
 
-    print(f'Accuracy: {accuracy_score(ys.numpy(), preds.numpy())}')
-    print('Confusion Matrix:')
-    print(confusion_matrix(ys.numpy(), preds.numpy()))
+    logger.info(f'Test acc: {accuracy_score(ys.numpy(), preds.numpy())}')
+    logger.info('Confusion Matrix:')
+    logger.info(confusion_matrix(ys.numpy(), preds.numpy()))
 
 
 if __name__ == '__main__':

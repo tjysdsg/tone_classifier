@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from train.dataset.dataset import SequentialEmbeddingDataset, collate_sequential_embedding
 from train.modules.transformers import TransEncoder
-from train.utils import (set_seed, AverageMeter, masked_accuracy, save_transformer_checkpoint, get_lr)
+from train.utils import (set_seed, AverageMeter, masked_accuracy, save_transformer_checkpoint, get_lr, create_logger)
 import torch
 import torch.nn as nn
 from train.config import NUM_CLASSES, EMBD_DIM, IN_PLANES
@@ -30,6 +30,8 @@ parser.add_argument('--seed', default=3007123, type=int)
 args = parser.parse_args()
 
 set_seed(args.seed)
+
+logger = create_logger('train_transformer', f'feats/{SAVE_DIR}/{args.action}_{args.start_epoch}.log')
 
 utt2tones = json.load(open('utt2tones_fixed.json'))
 utts = list(utt2tones.keys())
@@ -100,7 +102,7 @@ def main():
         save_transformer_checkpoint(f'exp/{SAVE_DIR}', epoch, model, optimizer, scheduler)
 
         acc_val = validate()
-        print(
+        logger.info(
             '\nEpoch %d\t  Loss %.4f\t  Accuracy %3.3f\t  lr %f\t  acc_val %3.3f\n'
             % (epoch, float(losses.avg), float(acc.avg), get_lr(optimizer), acc_val)
         )
@@ -109,7 +111,7 @@ def main():
 
 
 def validate() -> float:
-    print('=' * 25)
+    logger.info('============== VALIDATING ==============')
     model.eval()
 
     acc = AverageMeter()
