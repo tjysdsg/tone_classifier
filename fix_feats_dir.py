@@ -5,7 +5,7 @@ Create files required by train_embedding.py:
 - utt2spk
 - spk2utt
 
-To avoid renaming all the files and strings, 'speaker' means tone index (0 = 1st tone, 1 = 2nd tone, etc).
+To avoid renaming all the files and strings, 'speaker' means tone index (0 = no tone, 1 = 1st tone, 2 = 2nd tone, etc).
 """
 
 import os
@@ -16,23 +16,14 @@ TONES = list(range(5))
 
 
 def main():
-    # create .list file that contains all feature files
-    for t in TONES:
-        list_file = f'{DATA_DIR}/{t}.list'
-        if not os.path.exists(list_file):
-            print(f'Generating {list_file}...')
-            os.system(f'ls -1 {DATA_DIR}/{t}/ > {list_file}')
-        else:
-            print(f'Skipped {list_file}...')
-
     # find all files that are augmented
     tone_data = {t: [] for t in TONES}
     visited = set()
     for t in TONES:
-        list_file = open(f'{DATA_DIR}/{t}.list')
-        for line in list_file:
-            filename = line.replace('\n', '')
-            path = os.path.join(DATA_DIR, t, filename)
+        files = [f for f in os.scandir(f'{DATA_DIR}/{t}/')]
+        for f in files:
+            filename = f.name
+            path = f.path
 
             # assume all versions of augmentation exist if any of the augmented version exists
             # because feature_extraction.py do DA right next to each other
