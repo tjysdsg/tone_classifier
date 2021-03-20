@@ -1,6 +1,7 @@
 import torch
 import math
 import torch.nn as nn
+from train.utils import get_padding_mask
 
 
 class PositionalEncoding(nn.Module):
@@ -47,13 +48,7 @@ class TransEncoder(nn.Module):
     def forward(self, x, lengths):  # FIXME: lengths has different size than x if training on multiple GPUs
         # build src_key_padding_mask
         x = x.cuda()
-        batch_size = x.shape[0]
-        max_seq_len = x.shape[1]
-        padding_mask = torch.zeros(batch_size, max_seq_len + 1, dtype=torch.uint8)
-        padding_mask[(torch.arange(batch_size), lengths)] = 1
-        padding_mask = padding_mask.cumsum(dim=1)[:, :-1]
-        padding_mask = padding_mask > 0  # convert to BoolTensor
-        padding_mask = padding_mask.cuda()
+        padding_mask = get_padding_mask(x, lengths).cuda()
 
         # convert to seq_len * batch_size * hidden
         x = x.transpose(0, 1)

@@ -2,9 +2,32 @@ import os
 import sys
 import torch
 import logging
+from typing import List
 import numpy as np
 import random
 from train.modules.model_spk import ResNet34StatsPool
+
+
+def get_padding_mask(x: torch.Tensor, lengths: List[int]) -> torch.Tensor:
+    batch_size = x.shape[0]
+    max_seq_len = x.shape[1]
+    padding_mask = torch.zeros(batch_size, max_seq_len + 1, dtype=torch.uint8)
+    padding_mask[(torch.arange(batch_size), lengths)] = 1
+    padding_mask = padding_mask.cumsum(dim=1)[:, :-1]
+    padding_mask = padding_mask > 0  # convert to BoolTensor
+    padding_mask = padding_mask
+    return padding_mask
+
+
+def load_transformer_data():
+    from sklearn.model_selection import train_test_split
+    import json
+
+    utt2tones = json.load(open('utt2tones_fixed.json'))
+    utts = list(utt2tones.keys())
+    utts_train, utts_test = train_test_split(utts, test_size=0.25)
+    utts_train, utts_val = train_test_split(utts_train, test_size=0.1)
+    return utt2tones, utts_train, utts_test, utts_val
 
 
 def load_embedding_model(epoch: int, in_planes: int, embd_dim: int) -> ResNet34StatsPool:

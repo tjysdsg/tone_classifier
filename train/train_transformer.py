@@ -1,14 +1,15 @@
 import os
 import argparse
 from tqdm import trange
-from sklearn.model_selection import train_test_split
 from sklearn.metrics import confusion_matrix
-import json
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from train.dataset.dataset import SequentialEmbeddingDataset, collate_sequential_embedding
 from train.modules.transformers import TransEncoder
-from train.utils import (set_seed, AverageMeter, masked_accuracy, save_transformer_checkpoint, get_lr, create_logger)
+from train.utils import (
+    set_seed, AverageMeter, masked_accuracy, save_transformer_checkpoint, get_lr, create_logger,
+    load_transformer_data,
+)
 import torch
 import torch.nn as nn
 from train.config import NUM_CLASSES, EMBD_DIM, IN_PLANES
@@ -35,10 +36,7 @@ set_seed(args.seed)
 
 logger = create_logger('train_transformer', f'exp/{SAVE_DIR}/{args.action}_{args.start_epoch}.log')
 
-utt2tones = json.load(open('utt2tones_fixed.json'))
-utts = list(utt2tones.keys())
-utts_train, utts_test = train_test_split(utts, test_size=0.25)
-utts_train, utts_val = train_test_split(utts_train, test_size=0.1)
+utt2tones, utts_train, utts_test, utts_val = load_transformer_data()
 
 # train dataset
 train_loader = DataLoader(
