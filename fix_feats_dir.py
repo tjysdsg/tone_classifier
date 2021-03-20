@@ -23,7 +23,6 @@ def main():
         files = [f for f in os.scandir(f'{DATA_DIR}/{t}/')]
         for f in files:
             filename = f.name
-            path = f.path
 
             # assume all versions of augmentation exist if any of the augmented version exists
             # because feature_extraction.py do DA right next to each other
@@ -34,6 +33,7 @@ def main():
 
                 print(f'Found valid data {orig_name}', end='\r')
 
+                path = f'{DATA_DIR}/{t}/{orig_name}'
                 if orig_name not in visited:
                     tone_data[t].append([orig_name, path])
                     visited.add(orig_name)
