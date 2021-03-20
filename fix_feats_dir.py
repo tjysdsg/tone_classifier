@@ -16,9 +16,8 @@ TONES = list(range(5))
 
 
 def main():
-    is_augmented = {}
-
     tone_data = {t: [] for t in TONES}
+    visited = set()
     for t in TONES:
         for f in os.scandir(os.path.join(DATA_DIR, str(t))):
             path = f.path
@@ -27,14 +26,14 @@ def main():
             if 'noise' in filename or 'sp' in filename:
                 # remove '_noise' and '_sp09'/'_sp11' suffix
                 filename, ext = os.path.splitext(filename)
-                orig_name = filename.split('_')[:-1] + ext
-                is_augmented[orig_name] = True
+                orig_name = '_'.join(filename.split('_')[:-1]) + ext
 
-                # not including augmented version of data, they're only used in pytorch data loading
-                continue
+                print(f'{orig_name} is augmented', end='\r')
 
-            if is_augmented.get(filename, False):  # only use data that is augmented
-                tone_data[t].append([filename, path])
+                # only include data that is augmented
+                if orig_name not in visited:
+                    tone_data[t].append([orig_name, path])
+                    visited.add(orig_name)
 
     min_len = np.min([len(v) for k, v in tone_data.items()])
     print(f'Balanced data size of each tone is {min_len}')
