@@ -2,7 +2,6 @@ from transformers import BertForTokenClassification, set_seed, BertConfig
 import os
 import argparse
 from tqdm import trange
-import json
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from train.dataset.dataset import SequentialEmbeddingDataset, collate_sequential_embedding
@@ -71,11 +70,11 @@ if start_epoch != 0:
 model = nn.DataParallel(model)  # must be called after loading
 
 
-def model_forward_pass(x, y, lengths):
+def model_forward_pass(x, lengths):
     padding_mask = get_padding_mask(x, lengths).cuda()
     att_mask = (~padding_mask).type(torch.float32)
 
-    output = model(inputs_embeds=x, attention_mask=att_mask, labels=y)
+    output = model(inputs_embeds=x, attention_mask=att_mask)
     return output, padding_mask
 
 
@@ -91,7 +90,7 @@ def main():
         for i, (x, y, lengths) in enumerate(train_loader):
             x = x.cuda()
             y = y.cuda()
-            output, padding_mask = model_forward_pass(x, y, lengths)
+            output, padding_mask = model_forward_pass(x, lengths)
 
             # calc loss
             y_pred = output.logits
@@ -135,7 +134,7 @@ def validate() -> float:
             x = x.cuda()
             y = y.cuda()
 
-            output, padding_mask = model_forward_pass(x, y, lengths)
+            output, padding_mask = model_forward_pass(x, lengths)
 
             y = y.cpu()
             y_pred = output.logits.cpu()
