@@ -16,21 +16,33 @@ TONES = list(range(5))
 
 
 def main():
+    # create .list file that contains all feature files
+    for t in TONES:
+        list_file = f'{DATA_DIR}/{t}.list'
+        if not os.path.exists(list_file):
+            print(f'Generating {list_file}...')
+            os.system(f'ls -1 {DATA_DIR}/{t}/ > {list_file}')
+        else:
+            print(f'Skipped {list_file}...')
+
+    # find all files that are augmented
     tone_data = {t: [] for t in TONES}
     visited = set()
     for t in TONES:
-        for f in os.scandir(os.path.join(DATA_DIR, str(t))):
-            path = f.path
-            filename = f.name
+        list_file = open(f'{DATA_DIR}/{t}.list')
+        for line in list_file:
+            filename = line.replace('\n', '')
+            path = os.path.join(DATA_DIR, t, filename)
 
+            # assume all versions of augmentation exist if any of the augmented version exists
+            # because feature_extraction.py do DA right next to each other
             if 'noise' in filename or 'sp' in filename:
                 # remove '_noise' and '_sp09'/'_sp11' suffix
                 filename, ext = os.path.splitext(filename)
                 orig_name = '_'.join(filename.split('_')[:-1]) + ext
 
-                print(f'{orig_name} is augmented', end='\r')
+                print(f'Found valid data {orig_name}', end='\r')
 
-                # only include data that is augmented
                 if orig_name not in visited:
                     tone_data[t].append([orig_name, path])
                     visited.add(orig_name)
