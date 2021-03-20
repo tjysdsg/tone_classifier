@@ -15,6 +15,7 @@ from train.config import NUM_CLASSES, EMBD_DIM, IN_PLANES
 
 # create output dir
 SAVE_DIR = 'transformer'
+MAX_GRAD_NORM = 10
 os.makedirs(f'exp/{SAVE_DIR}', exist_ok=True)
 
 parser = argparse.ArgumentParser(description='Train embedding on transformer')
@@ -88,6 +89,9 @@ def main():
 
             optimizer.zero_grad()
             loss.backward()
+            _ = nn.utils.clip_grad_norm_(model.parameters(), MAX_GRAD_NORM)
+            _ = nn.utils.clip_grad_norm_(model.parameters(), MAX_GRAD_NORM)
+
             optimizer.step()
 
             losses.update(loss.data.item(), n_samples)
