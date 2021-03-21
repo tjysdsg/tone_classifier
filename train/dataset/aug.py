@@ -27,14 +27,11 @@ def get_env_wav_list(name: str) -> List[str]:
     return ret
 
 
-def speed_perturb(y: np.ndarray, sr=16000) -> List[np.ndarray, np.ndarray]:
-    ret = []
-    for speed in [0.9, 1.1]:
-        tfm = sox.Transformer()
-        tfm.speed(speed)
-        _y = tfm.build_array(input_array=y, sample_rate_in=sr)
-        ret.append(_y)
-    return ret
+def speed_perturb(y: np.ndarray, speed: float, sr=16000) -> np.ndarray:
+    tfm = sox.Transformer()
+    tfm.speed(speed)
+    y = tfm.build_array(input_array=y, sample_rate_in=sr)
+    return y
 
 
 def norm_speech(y: np.ndarray) -> np.ndarray:

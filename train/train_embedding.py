@@ -1,10 +1,12 @@
 import argparse
+import json
 from tqdm import trange
 import numpy as np
 from train.utils import (
     set_seed, create_logger, AverageMeter, accuracy, save_checkpoint, save_ramdom_state, get_lr,
-    change_lr
+    change_lr, warmup_lr,
 )
+from sklearn.model_selection import train_test_split
 from sklearn.metrics import confusion_matrix, accuracy_score
 import os
 import random
@@ -12,7 +14,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from train.modules.model_spk import ResNet34StatsPool
-from train.dataset.dataset import SpectrogramDataset, collate_fn_pad
+from train.dataset.dataset import WavDataset, collate_fn_pad
 from train.config import NUM_CLASSES, EMBD_DIM, IN_PLANES
 
 # create output dir
@@ -23,8 +25,8 @@ parser = argparse.ArgumentParser(description='Training embedding')
 # dataset
 parser.add_argument('--data_dir', default='feats', type=str)
 parser.add_argument('--data_name', default='train', type=str)
-parser.add_argument('-j', '--workers', default=20, type=int)
-parser.add_argument('-b', '--batch_size', default=64, type=int)
+parser.add_argument('-j', '--workers', default=32, type=int)
+parser.add_argument('-b', '--batch_size', default=32, type=int)
 parser.add_argument('--val_data_name', default='val', type=str)
 parser.add_argument('--test_data_name', default='test', type=str)
 # learning rate scheduler
@@ -43,19 +45,20 @@ set_seed(args.seed)
 logger = create_logger('train_embedding', f'exp/{SAVE_DIR}/{args.action}_{args.start_epoch}.log')
 
 
-def create_dataloader(data_dir):
-    wavscp = [line.split() for line in open(os.path.join(data_dir, 'wav.scp'))]
-    utt2spk = {line.split()[0]: int(line.split()[1]) for line in open(os.path.join(data_dir, 'utt2spk'))}
+def create_dataloader(data: list):
     return DataLoader(
-        SpectrogramDataset(wavscp, utt2spk), batch_size=args.batch_size, num_workers=args.workers,
+        WavDataset(data), batch_size=args.batch_size, num_workers=args.workers,
         pin_memory=True, collate_fn=collate_fn_pad,
     )
 
 
 # data loaders
-train_loader = create_dataloader(f'feats/{args.data_name}')
-val_dataloader = create_dataloader(f'feats/{args.val_data_name}')
-test_dataloader = create_dataloader(f'feats/{args.test_data_name}')
+all_data: list = json.load(open('all_data.json'))
+data_train, data_test = train_test_split(all_data, test_size=0.2)
+data_train, data_val = train_test_split(data_train, test_size=0.125)
+train_loader = create_dataloader(data_train)
+val_dataloader = create_dataloader(data_val)
+test_dataloader = create_dataloader(data_test)
 
 # models
 model = ResNet34StatsPool(IN_PLANES, EMBD_DIM, dropout=0.5).cuda()
@@ -68,13 +71,6 @@ optimizer = torch.optim.SGD(
     list(model.parameters()) + list(classifier.parameters()), lr=lr, momentum=0.9,
 )
 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=args.lr_patience, factor=0.1)
-
-batch_per_epoch = len(train_loader)
-
-
-def lr_lambda(x):
-    return lr / (batch_per_epoch * args.warm_up_epoch) * (x + 1)
-
 
 # load previous model if resume
 epochs, start_epoch = args.epochs, args.start_epoch
@@ -108,7 +104,10 @@ def train():
 
         for i, (feats, label) in enumerate(train_loader):
             if epoch < args.warm_up_epoch:
-                change_lr(optimizer, lr_lambda(len(train_loader) * epoch + i))
+                change_lr(
+                    optimizer,
+                    warmup_lr(lr, len(train_loader) * epoch + i, len(train_loader), args.warm_up_epoch)
+                )
 
             feats, label = feats.cuda(), label.cuda()
 

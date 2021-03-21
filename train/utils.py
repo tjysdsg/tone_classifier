@@ -8,6 +8,10 @@ import random
 from train.modules.model_spk import ResNet34StatsPool
 
 
+def warmup_lr(lr: float, step: int, epoch_size: int, n_warmup_epochs: int):
+    return lr / (epoch_size * n_warmup_epochs) * (step + 1)
+
+
 def get_padding_mask(x: torch.Tensor, lengths: List[int]) -> torch.Tensor:
     batch_size = x.shape[0]
     max_seq_len = x.shape[1]

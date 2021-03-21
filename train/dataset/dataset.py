@@ -1,9 +1,11 @@
 import numpy as np
+import librosa
 import random
 import os
 import torch
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import Dataset
+from train.config import WAV_DIR
 
 
 def collate_fn_pad(batch):
@@ -34,6 +36,10 @@ def collate_sequential_embedding(batch):
 
 
 class SpectrogramDataset(Dataset):
+    """
+    Load extracted spectrogram
+    """
+
     def __init__(self, wav_scp, utt2label):
         self.wav_scp = wav_scp
         self.utt2label = utt2label
@@ -55,6 +61,71 @@ class SpectrogramDataset(Dataset):
         signal = np.moveaxis(signal, 0, 1)
         signal = torch.from_numpy(signal.astype('float32'))
         return signal, self.utt2label[utt]
+
+
+class WavDataset(Dataset):
+    def __init__(self, data: list, wav_dir=WAV_DIR, snr_range=(15, 30)):
+        """
+        :param data: List of (tone, utt, phone, start, dur)
+        """
+        self.data = data
+        self.wav_dir = wav_dir
+        self.snr_range = snr_range
+
+    def get_wav_path(self, utt: str):
+        spk = utt[1:6]
+        return os.path.join(self.wav_dir, spk, f'{utt}.wav')
+
+    def spectro(self, y: np.ndarray, start: float, dur: float, sr=16000, fmin=50, fmax=350, hop_length=16):
+        S = librosa.feature.melspectrogram(
+            y=y, sr=sr, n_mels=64, n_fft=2048, hop_length=hop_length, fmin=fmin, fmax=fmax
+        )
+        S = librosa.power_to_db(S, ref=np.max)
+        # S = S[::-1, :]  # only for visualization
+
+        # crop to the start and the end of a phone
+        end = start + dur
+        s, e = librosa.time_to_frames([start, end], sr=sr, hop_length=hop_length)
+        s = np.max(s, 0)
+        e = np.max(e, 0)
+
+        S = S[:, s:e + 1]
+        return S
+
+    def aug(self, y: np.ndarray, start: float, dur: float):
+        from train.dataset.aug import norm_speech, add_random_noise, speed_perturb, add_random_rir
+
+        aug_type = random.choice(['noise', 'reverb', 'sp', ''])
+
+        if aug_type == 'noise':
+            snr = random.uniform(self.snr_range[0], self.snr_range[1])
+            noise_type = random.choice(['noise', 'music'])
+            y = add_random_noise(y, snr, env_wav_type=noise_type)
+        elif aug_type == 'sp':
+            speed = random.choice([0.9, 1.1])
+            y = speed_perturb(y, speed)
+            start /= speed
+            dur /= speed
+        elif aug_type == 'reverb':
+            y = add_random_rir(y)
+
+        return norm_speech(y), start, dur
+
+    def __getitem__(self, idx):
+        tone, utt, phone, start, dur = self.data[idx]
+
+        path = self.get_wav_path(utt)
+        y, _ = librosa.load(path, sr=16000)
+
+        y, start, dur = self.aug(y, start, dur)
+
+        signal = self.spectro(y, start, dur)
+        signal = np.moveaxis(signal, 0, 1)  # from (mels, time) to (time, mels)
+        signal = torch.from_numpy(signal.astype('float32'))
+        return signal, tone
+
+    def __len__(self):
+        return len(self.data)
 
 
 class SequentialSpectrogramDataset(Dataset):
