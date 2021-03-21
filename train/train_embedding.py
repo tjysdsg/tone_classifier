@@ -30,7 +30,7 @@ parser.add_argument('-b', '--batch_size', default=32, type=int)
 parser.add_argument('--val_data_name', default='val', type=str)
 parser.add_argument('--test_data_name', default='test', type=str)
 # learning rate scheduler
-parser.add_argument('--lr', default=None, type=float)
+parser.add_argument('--lr', default=0.01, type=float)
 parser.add_argument('--warm_up_epoch', default=3, type=int)
 parser.add_argument('--lr_patience', default=4, type=int)
 # others
@@ -54,8 +54,8 @@ def create_dataloader(data: list):
 
 # data loaders
 all_data: list = json.load(open('all_data.json'))
-data_train, data_test = train_test_split(all_data, test_size=0.2)
-data_train, data_val = train_test_split(data_train, test_size=0.125)
+data_train, data_test = train_test_split(all_data, test_size=0.2, random_state=1024)
+data_train, data_val = train_test_split(data_train, test_size=0.125, random_state=1024)
 train_loader = create_dataloader(data_train)
 val_dataloader = create_dataloader(data_val)
 test_dataloader = create_dataloader(data_test)
@@ -66,7 +66,7 @@ classifier = nn.Linear(EMBD_DIM, NUM_CLASSES).cuda()
 
 # criterion, optimizer, scheduler
 criterion = nn.CrossEntropyLoss().cuda()
-lr = args.lr if args.lr else 0.1 * args.batch_size / 256
+lr = args.lr
 optimizer = torch.optim.SGD(
     list(model.parameters()) + list(classifier.parameters()), lr=lr, momentum=0.9,
 )
@@ -103,11 +103,11 @@ def train():
         t.set_description(f'epoch {epoch}')
 
         for i, (feats, label) in enumerate(train_loader):
-            if epoch < args.warm_up_epoch:
-                change_lr(
-                    optimizer,
-                    warmup_lr(lr, len(train_loader) * epoch + i, len(train_loader), args.warm_up_epoch)
-                )
+            # if epoch < args.warm_up_epoch:
+            #     change_lr(
+            #         optimizer,
+            #         warmup_lr(lr, len(train_loader) * epoch + i, len(train_loader), args.warm_up_epoch)
+            #     )
 
             feats, label = feats.cuda(), label.cuda()
 
