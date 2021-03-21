@@ -5,7 +5,7 @@ import os
 import torch
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import Dataset
-from train.config import WAV_DIR
+from train.config import WAV_DIR, WAV_CACHE_DIR
 
 
 def collate_fn_pad(batch):
@@ -64,17 +64,24 @@ class SpectrogramDataset(Dataset):
 
 
 class WavDataset(Dataset):
-    def __init__(self, data: list, wav_dir=WAV_DIR, snr_range=(15, 30)):
+    def __init__(self, data: list, wav_dir=WAV_DIR, cache_dir=WAV_CACHE_DIR, snr_range=(15, 30)):
         """
         :param data: List of (tone, utt, phone, start, dur)
         """
         self.data = data
-        self.wav_dir = wav_dir
         self.snr_range = snr_range
+        self.wav_dir = wav_dir
+        self.cache_dir = cache_dir
 
     def get_wav_path(self, utt: str):
         spk = utt[1:6]
         return os.path.join(self.wav_dir, spk, f'{utt}.wav')
+
+    def get_cache_path(self, utt: str):
+        spk = utt[1:6]
+        spk_dir = os.path.join(self.cache_dir, spk)
+        os.makedirs(spk_dir, exist_ok=True)
+        return os.path.join(spk_dir, f'{utt}.npy')
 
     def spectro(self, y: np.ndarray, start: float, dur: float, sr=16000, fmin=50, fmax=350, hop_length=16):
         S = librosa.feature.melspectrogram(
@@ -115,7 +122,12 @@ class WavDataset(Dataset):
         tone, utt, phone, start, dur = self.data[idx]
 
         path = self.get_wav_path(utt)
-        y, _ = librosa.load(path, sr=16000)
+        cache_path = self.get_cache_path(utt)
+        if os.path.exists(cache_path):
+            y = np.load(cache_path, allow_pickle=False)
+        else:
+            y, _ = librosa.load(path, sr=16000)
+            np.save(cache_path, y, allow_pickle=False)
 
         y, start, dur = self.aug(y, start, dur)
 
