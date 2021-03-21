@@ -1,4 +1,5 @@
 import numpy as np
+import random
 import os
 import torch
 from torch.nn.utils.rnn import pad_sequence
@@ -42,6 +43,14 @@ class SpectrogramDataset(Dataset):
 
     def __getitem__(self, idx):
         utt, filename = self.wav_scp[idx]
+
+        # randomly choose data augmentation
+        suffixes = ['', 'noise', 'sp09', 'sp11']
+        suffix = suffixes[random.randint(0, len(suffixes) - 1)]
+        if suffix != '':
+            filename, ext = os.path.splitext(filename)
+            filename = f'{filename}_{suffix}' + ext
+
         signal = np.load(filename, allow_pickle=False)
         signal = np.moveaxis(signal, 0, 1)
         signal = torch.from_numpy(signal.astype('float32'))
