@@ -69,13 +69,13 @@ def extract_feature(tone: int, utt: str, phone: str, start: float, dur: float):
         print(f"Skipping {outpath}", end='\r')
 
     # add random noise
-    from aug import add_random_noise, speed_perturb
+    from train.dataset.aug import add_random_noise, speed_perturb
     outpath_noise = get_output_path(utt, phone, start, outdir, postfix='noise')
     if outpath_noise not in existing:
         if y is None:
             y, _ = librosa.load(input_path, sr=16000)
 
-        snr = random.uniform(50, 60)
+        snr = random.uniform(15, 30)
         y_noise = add_random_noise(y, snr)
         S = spectro(y_noise, start, dur)
         save_spectro_to_file(S, outpath_noise)
