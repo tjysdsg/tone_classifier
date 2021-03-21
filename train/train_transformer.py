@@ -38,15 +38,17 @@ logger = create_logger('train_transformer', f'exp/{SAVE_DIR}/{args.action}_{args
 
 utt2tones, utts_train, utts_test, utts_val = load_transformer_data()
 
-# train dataset
+# datasets
 train_loader = DataLoader(
     SequentialEmbeddingDataset(utts_train, utt2tones, embedding_dir=args.embedding_dir),
     batch_size=args.batch_size, num_workers=args.workers, pin_memory=True, collate_fn=collate_sequential_embedding,
 )
-
-# val dataset
 val_loader = DataLoader(
     SequentialEmbeddingDataset(utts_val, utt2tones, embedding_dir=args.embedding_dir),
+    batch_size=args.batch_size, num_workers=args.workers, pin_memory=True, collate_fn=collate_sequential_embedding,
+)
+test_loader = DataLoader(
+    SequentialEmbeddingDataset(utts_test, utt2tones, embedding_dir=args.embedding_dir),
     batch_size=args.batch_size, num_workers=args.workers, pin_memory=True, collate_fn=collate_sequential_embedding,
 )
 
@@ -68,7 +70,7 @@ if start_epoch != 0:
 model = nn.DataParallel(model)  # must be called after loading
 
 
-def main():
+def train():
     for epoch in range(start_epoch, epochs):
         losses, acc = AverageMeter(), AverageMeter()
         model.train()
@@ -130,5 +132,35 @@ def validate() -> float:
     return acc.avg
 
 
+def test():
+    from sklearn.metrics import confusion_matrix
+
+    logger.info('============== TESTING ==============')
+    model.eval()
+
+    ys = []
+    preds = []
+    with torch.no_grad():
+        for j, (x, y, lengths) in enumerate(test_loader):
+            y_pred, _ = model(x, lengths)
+            y = y.cpu()
+            y_pred = torch.argmax(y_pred, dim=-1).cpu()
+
+            for i in range(x.shape[0]):
+                ys.append(y[i][:lengths[i]])
+                preds.append(y_pred[i][:lengths[i]])
+
+    ys = torch.cat(ys)
+    preds = torch.cat(preds)
+
+    logger.info('Confusion Matrix:')
+    logger.info(confusion_matrix(ys.numpy(), preds.numpy()))
+
+
 if __name__ == '__main__':
-    main()
+    if args.action == 'train':
+        train()
+    elif args.action == 'test':
+        test()
+    else:
+        raise RuntimeError(f"Unknown action: {args.action}")
