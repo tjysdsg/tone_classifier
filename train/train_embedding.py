@@ -4,9 +4,7 @@ from tqdm import trange
 import numpy as np
 from train.utils import (
     set_seed, create_logger, AverageMeter, accuracy, save_checkpoint, save_ramdom_state, get_lr,
-    change_lr, warmup_lr,
 )
-from sklearn.model_selection import train_test_split
 from sklearn.metrics import confusion_matrix, accuracy_score
 import os
 import random
@@ -29,6 +27,9 @@ parser.add_argument('-j', '--workers', default=32, type=int)
 parser.add_argument('-b', '--batch_size', default=32, type=int)
 parser.add_argument('--val_data_name', default='val', type=str)
 parser.add_argument('--test_data_name', default='test', type=str)
+parser.add_argument('--train_subset_size', default=0.03, type=float)
+parser.add_argument('--test_subset_size', default=0.03, type=float)
+parser.add_argument('--val_subset_size', default=0.03, type=float)
 # learning rate scheduler
 parser.add_argument('--lr', default=0.01, type=float)
 parser.add_argument('--warm_up_epoch', default=3, type=int)
@@ -45,7 +46,9 @@ set_seed(args.seed)
 logger = create_logger('train_embedding', f'exp/{SAVE_DIR}/{args.action}_{args.start_epoch}.log')
 
 
-def create_dataloader(data: list):
+def create_dataloader(data: list, subset_size: float):
+    s = int(len(data) * subset_size)
+    data = data[:s]
     return DataLoader(
         WavDataset(data), batch_size=args.batch_size, num_workers=args.workers,
         pin_memory=True, collate_fn=collate_fn_pad,
@@ -53,12 +56,16 @@ def create_dataloader(data: list):
 
 
 # data loaders
-all_data: list = json.load(open('all_data.json'))
-data_train, data_test = train_test_split(all_data, test_size=0.2, random_state=1024)
-data_train, data_val = train_test_split(data_train, test_size=0.125, random_state=1024)
-train_loader = create_dataloader(data_train)
-val_dataloader = create_dataloader(data_val)
-test_dataloader = create_dataloader(data_test)
+data_train: list = json.load(open('data_embedding/train.json'))
+data_test: list = json.load(open('data_embedding/test.json'))
+data_val: list = json.load(open('data_embedding/val.json'))
+train_loader = create_dataloader(data_train, args.train_subset_size)
+val_loader = create_dataloader(data_val, args.val_subset_size)
+test_loader = create_dataloader(data_test, args.test_subset_size)
+
+print('train size:', len(train_loader) * args.batch_size)
+print('test size:', len(test_loader) * args.batch_size)
+print('val size:', len(val_loader) * args.batch_size)
 
 # models
 model = ResNet34StatsPool(IN_PLANES, EMBD_DIM, dropout=0.5).cuda()
@@ -86,8 +93,6 @@ if start_epoch != 0:
     random.setstate(checkpoint['random'])
     np.random.set_state(checkpoint['np'])
     torch.set_rng_state(checkpoint['torch'])
-else:
-    print(str(model) + '\n' + str(classifier) + '\n')
 
 model = nn.DataParallel(model)
 
@@ -150,7 +155,7 @@ def validate() -> float:
     ys = []
     preds = []
     with torch.no_grad():
-        for j, (x, y) in enumerate(val_dataloader):
+        for j, (x, y) in enumerate(val_loader):
             y = y.cpu()
             y_pred = classifier(model(x)).cpu()
             ys.append(y)
@@ -172,7 +177,7 @@ def test():
     ys = []
     preds = []
     with torch.no_grad():
-        for j, (x, y) in enumerate(test_dataloader):
+        for j, (x, y) in enumerate(test_loader):
             y = y.cpu()
             y_pred = classifier(model(x)).cpu()
             ys.append(y)
