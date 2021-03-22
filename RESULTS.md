@@ -28,6 +28,8 @@ Confusion Matrix:
 
 Epoch 78 Loss 0.2022 Accuracy 0.925 lr 0.012500 acc_val 0.861
 
+Accuracy for only 4 tones: 0.806
+
 # Transformer (encoder)
 
 ||||||
@@ -39,3 +41,5 @@ Epoch 78 Loss 0.2022 Accuracy 0.925 lr 0.012500 acc_val 0.861
 |    709 |  2276 |   975 |  2800 | 39482 |
 
 Epoch 499 Loss 0.0353 Accuracy 0.892 lr 0.000000 acc_val 0.899
+
+Accuracy for only 4 tones: 0.816
