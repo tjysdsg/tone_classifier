@@ -23,13 +23,13 @@ parser = argparse.ArgumentParser(description='Training embedding')
 # dataset
 parser.add_argument('--data_dir', default='feats', type=str)
 parser.add_argument('--data_name', default='train', type=str)
-parser.add_argument('-j', '--workers', default=32, type=int)
-parser.add_argument('-b', '--batch_size', default=32, type=int)
+parser.add_argument('-j', '--workers', default=10, type=int)
+parser.add_argument('-b', '--batch_size', default=64, type=int)
 parser.add_argument('--val_data_name', default='val', type=str)
 parser.add_argument('--test_data_name', default='test', type=str)
 parser.add_argument('--train_subset_size', default=0.03, type=float)
 parser.add_argument('--test_subset_size', default=0.03, type=float)
-parser.add_argument('--val_subset_size', default=0.03, type=float)
+parser.add_argument('--val_subset_size', default=0.06, type=float)
 # learning rate scheduler
 parser.add_argument('--lr', default=0.01, type=float)
 parser.add_argument('--warm_up_epoch', default=3, type=int)
@@ -163,8 +163,13 @@ def validate() -> float:
 
     ys = torch.cat(ys)
     preds = torch.cat(preds)
+
+    confusion = confusion_matrix(ys.numpy(), preds.numpy())
     logger.info('Confusion Matrix:')
-    logger.info(confusion_matrix(ys.numpy(), preds.numpy()))
+    logger.info(confusion)
+
+    confusion = confusion[1:, 1:]
+    logger.info(f'4 tone accuracy: {np.trace(confusion) / np.sum(confusion)}')
 
     return accuracy_score(ys.numpy(), preds.numpy())
 
@@ -187,8 +192,13 @@ def test():
     preds = torch.cat(preds)
 
     logger.info(f'Test acc: {accuracy_score(ys.numpy(), preds.numpy())}')
+
+    confusion = confusion_matrix(ys.numpy(), preds.numpy())
     logger.info('Confusion Matrix:')
-    logger.info(confusion_matrix(ys.numpy(), preds.numpy()))
+    logger.info(confusion)
+
+    confusion = confusion[1:, 1:]
+    logger.info(f'4 tone accuracy: {np.trace(confusion) / np.sum(confusion)}')
 
 
 if __name__ == '__main__':

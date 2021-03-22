@@ -88,7 +88,6 @@ class WavDataset(Dataset):
             y=y, sr=sr, n_mels=64, n_fft=2048, hop_length=hop_length, fmin=fmin, fmax=fmax
         )
         S = librosa.power_to_db(S, ref=np.max)
-        # S = S[::-1, :]  # only for visualization
 
         # crop to the start and the end of a phone
         end = start + dur
@@ -96,8 +95,7 @@ class WavDataset(Dataset):
         s = np.max(s, 0)
         e = np.max(e, 0)
 
-        S = S[:, s:e + 1]
-        return S
+        return S[:, s:e + 1]
 
     def aug(self, y: np.ndarray, start: float, dur: float):
         from train.dataset.aug import norm_speech, add_random_noise, speed_perturb, add_random_rir
@@ -107,28 +105,30 @@ class WavDataset(Dataset):
         if aug_type == 'noise':
             snr = random.uniform(self.snr_range[0], self.snr_range[1])
             noise_type = random.choice(['noise', 'music'])
-            y = add_random_noise(y, snr, env_wav_type=noise_type)
+            y = add_random_noise(norm_speech(y), snr, env_wav_type=noise_type)
         elif aug_type == 'sp':
             speed = random.choice([0.9, 1.1])
             y = speed_perturb(y, speed)
+            y = norm_speech(y)
             start /= speed
             dur /= speed
         elif aug_type == 'reverb':
-            y = add_random_rir(y)
+            y = add_random_rir(norm_speech(y))
 
-        return norm_speech(y), start, dur
+        return y, start, dur
 
     def __getitem__(self, idx):
         tone, utt, phone, start, dur = self.data[idx]
 
         path = self.get_wav_path(utt)
-        cache_path = self.get_cache_path(utt)
-        if os.path.exists(cache_path):
-            y = np.load(cache_path, allow_pickle=False)
-        else:
-            y, _ = librosa.load(path, sr=16000)
-            np.save(cache_path, y, allow_pickle=False)
+        # cache_path = self.get_cache_path(utt)
+        # if os.path.exists(cache_path):
+        #     y = np.load(cache_path, allow_pickle=False)
+        # else:
+        #     y, _ = librosa.load(path, sr=16000)
+        #     np.save(cache_path, y, allow_pickle=False)
 
+        y, _ = librosa.load(path, sr=16000)
         y, start, dur = self.aug(y, start, dur)
 
         signal = self.spectro(y, start, dur)
