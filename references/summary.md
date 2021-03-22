@@ -14,8 +14,9 @@ Shortcomings:
 
 - GMM
 - pitch hard to track especially when noise exists
-- need 2 layers to work together (cut by full syllables + contextual embedding) to include contextual information
-- RNN converts frames to segment embedding, not fully utilizing available phone boundary information
+- using full syllable, is it the better?
+- not utilizing RNN to include contextual information across syllables (using average of hidden states is probably not
+  so good)
 
 # IMPROVING MISPRONUNCIATION DETECTION AND ENRICHING - CHAPTER 5
 
