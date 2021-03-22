@@ -155,7 +155,7 @@ def collect_stats():
                     utt2trans[utt].append(final)
 
     # utt to timestamps
-    utt2time = {}
+    utt2time = {}  # {utt: [start, dur, tone]}
     with open('phone_ctm.txt') as f:
         prev_utt = 'fuck'
         prev_dur = 0
@@ -194,15 +194,15 @@ def collect_stats():
 
     all_data = []  # list of (tone, utt, phone, start, dur)
     utt2tones = {}  # {utt: [tone, phone, start, dur]}
-    for k, v in utt2time.items():
-
-        trans = utt2trans.get(k)
+    for utt, data in utt2time.items():
+        trans = utt2trans.get(utt)
         if trans is None:
             continue
-        if len(trans) != len(v):
-            print(f'WARNING: utt {k} different length of transcript and timestamps')
+        if len(trans) != len(data):
+            print(f'WARNING: utt {utt} different length of transcript and timestamps')
             continue
 
+        # collect phone boundaries from ASR and tones from annotations
         for i, p in enumerate(trans):
             tone = p[-1]
             if not tone.isnumeric():  # initials don't have tones, using 0 to represent
@@ -211,13 +211,13 @@ def collect_stats():
                 tone = int(tone)
                 if tone == 5:  # not including light tone
                     continue
-            start = v[i][0]
-            dur = v[i][1]
+            start = data[i][0]
+            dur = data[i][1]
 
-            if k not in utt2tones:
-                utt2tones[k] = []
-            utt2tones[k].append([tone, p, start, dur])
-            all_data.append([tone, k, p, start, dur])
+            if utt not in utt2tones:
+                utt2tones[utt] = []
+            utt2tones[utt].append([tone, p, start, dur])
+            all_data.append([tone, utt, p, start, dur])
 
     with open('all_data.json', 'w') as f:
         json.dump(all_data, f)
