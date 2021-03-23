@@ -5,7 +5,7 @@ export PATH=$PWD/utils/:$KALDI_ROOT/tools/openfst/bin:$PWD:$PATH
 . $KALDI_ROOT/tools/config/common_path.sh
 export LC_ALL=C
 
-ali_path=/mingback/students/tjy/std-mandarin/scripts/exp/tri5a_sp_ali
+ali_path=ssb_align/exp/tri_ali/
 # ali_path=/NASdata/pc_backup/jiayan/close_talk_manderin/exp/tri14_sp_ali
 stage=1
 
