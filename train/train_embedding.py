@@ -12,7 +12,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from train.modules.model_spk import ResNet34StatsPool
-from train.dataset.dataset import WavDataset, collate_fn_pad
+from train.dataset.dataset import SpectrogramDataset, collate_fn_pad
 from train.config import NUM_CLASSES, EMBD_DIM, IN_PLANES
 
 # create output dir
@@ -28,8 +28,8 @@ parser.add_argument('-b', '--batch_size', default=64, type=int)
 parser.add_argument('--val_data_name', default='val', type=str)
 parser.add_argument('--test_data_name', default='test', type=str)
 parser.add_argument('--train_subset_size', default=0.03, type=float)
-parser.add_argument('--test_subset_size', default=0.03, type=float)
-parser.add_argument('--val_subset_size', default=0.06, type=float)
+parser.add_argument('--test_subset_size', default=0.1, type=float)
+parser.add_argument('--val_subset_size', default=0.1, type=float)
 # learning rate scheduler
 parser.add_argument('--lr', default=0.01, type=float)
 parser.add_argument('--warm_up_epoch', default=3, type=int)
@@ -50,7 +50,7 @@ def create_dataloader(data: list, subset_size: float):
     s = int(len(data) * subset_size)
     data = data[:s]
     return DataLoader(
-        WavDataset(data), batch_size=args.batch_size, num_workers=args.workers,
+        SpectrogramDataset(data), batch_size=args.batch_size, num_workers=args.workers,
         pin_memory=True, collate_fn=collate_fn_pad,
     )
 

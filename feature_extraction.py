@@ -1,115 +1,12 @@
-import numpy as np
-import random
-import os
-from os.path import join as pjoin
 import json
-import sys
-import argparse
-from multiprocessing import Process
 
-data_root = '/NASdata/AudioData/mandarin/AISHELL-2/iOS/data/wav/'
 # 声母
 INITIALS = ['b', 'c', 'ch', 'd', 'f', 'g', 'h', 'j', 'k', 'l', 'm', 'n', 'p', 'q', 'r', 's', 'sh', 't', 'w', 'x', 'y',
             'z', 'zh']
 OUTDIR = 'feats'
-EXISTING_FILES = {t: [] for t in range(5)}
 
 
-def get_output_path(utt, phone, start, data_dir, postfix=''):
-    # `start` is used to distinguish between multiple occurrence of a phone in a sentence
-    name = f"{utt}_{phone}_{start:.3f}"
-    if len(postfix) > 0:
-        name += f'_{postfix}'
-    return pjoin(data_dir, f'{name}.npy')
-
-
-def spectro(y, start: float, dur: float, sr=16000, fmin=50, fmax=350, hop_length=16):
-    import librosa
-
-    # mel-spectrogram
-    S = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=64, n_fft=2048, hop_length=hop_length, fmin=fmin, fmax=fmax)
-    S = librosa.power_to_db(S, ref=np.max)
-    # S = S[::-1, :]  # only for visualization
-
-    # crop to the start and the end of a phone
-    end = start + dur
-    s, e = librosa.time_to_frames([start, end], sr=sr, hop_length=hop_length)
-    s = np.max(s, 0)
-    e = np.max(e, 0)
-
-    S = S[:, s:e + 1]
-
-    return S
-
-
-def save_spectro_to_file(S, output_path: str):
-    np.save(output_path, S, allow_pickle=False)
-
-
-def extract_feature(tone: int, utt: str, phone: str, start: float, dur: float):
-    import librosa
-    spk = utt[1:6]
-
-    outdir = os.path.join(OUTDIR, f'{tone}')
-    os.makedirs(outdir, exist_ok=True)
-    input_path = pjoin(data_root, spk, f'{utt}.wav')
-    existing = EXISTING_FILES[tone]
-    y = None
-
-    # original
-    outpath = get_output_path(utt, phone, start, outdir)
-    if outpath not in existing:
-        if y is None:
-            y, _ = librosa.load(input_path, sr=16000)
-
-        S = spectro(y, start, dur)
-        save_spectro_to_file(S, outpath)
-    else:
-        sys.stdout.write("\033[K")
-        print(f"Skipping {outpath}", end='\r')
-
-    # add random noise
-    from train.dataset.aug import add_random_noise, speed_perturb
-    outpath_noise = get_output_path(utt, phone, start, outdir, postfix='noise')
-    if outpath_noise not in existing:
-        if y is None:
-            y, _ = librosa.load(input_path, sr=16000)
-
-        snr = random.uniform(15, 30)
-        y_noise = add_random_noise(y, snr)
-        S = spectro(y_noise, start, dur)
-        save_spectro_to_file(S, outpath_noise)
-    else:
-        sys.stdout.write("\033[K")
-        print(f"Skipping {outpath_noise}", end='\r')
-
-    # speed perturb
-    outpath_sp09 = get_output_path(utt, phone, start, outdir, postfix='sp09')
-    outpath_sp11 = get_output_path(utt, phone, start, outdir, postfix='sp11')
-    if outpath_sp09 not in existing:
-        if y is None:
-            y, _ = librosa.load(input_path, sr=16000)
-
-        y_sp09, y_sp11 = speed_perturb(y)
-
-        S = spectro(y_sp09, start / 0.9, dur / 0.9)
-        save_spectro_to_file(S, outpath_sp09)
-
-        S = spectro(y_sp11, start / 1.1, dur / 1.1)
-        save_spectro_to_file(S, outpath_sp11)
-    else:
-        sys.stdout.write("\033[K")
-        print(f"Skipping {outpath_sp09} and {outpath_sp11}", end='\r')
-
-
-def worker(utt2tones: dict, utt):
-    tones = utt2tones[utt]
-    for t in tones:
-        tone, phone, start, dur = t
-        extract_feature(tone, utt, phone, start, dur)
-
-
-def collect_stats():
+def main():
     # SSB utterance id to aishell2 utterance id
     ssb2utt = {}
     with open('ssbutt.txt') as f:
@@ -223,43 +120,6 @@ def collect_stats():
         json.dump(all_data, f)
     with open('utt2tones.json', 'w') as f:
         json.dump(utt2tones, f)
-
-
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--stage', type=int)
-    args = parser.parse_args()
-
-    if args.stage <= 1:
-        collect_stats()
-    else:
-        print("Loading...")
-
-        # find existing files
-        # os.path.exists() is slow when the directory contains large amount of files
-        for t in range(5):
-            folder = os.path.join(OUTDIR, f'{t}')
-            os.makedirs(folder, exist_ok=True)
-            paths = [d.path for d in os.scandir(folder)]
-            EXISTING_FILES[t] = set(paths)
-
-        # load stage 1 output
-        n_jobs = 16
-        utt2tones: dict = json.load(open('utt2tones.json'))
-        utts = list(utt2tones.keys())
-        N = len(utts)
-        n_batches = N // n_jobs + 1
-
-        print("Extracting mel-spectrogram features")
-        for b in range(n_batches):
-            print()
-            print(f'Batch {b}/{n_batches}')
-            offset = b * n_jobs
-            ps = [Process(target=worker, args=(utt2tones, utts[offset + i],)) for i in range(n_jobs) if offset + i < N]
-            for p in ps:
-                p.start()
-            for p in ps:
-                p.join()
 
 
 if __name__ == "__main__":

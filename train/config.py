@@ -1,5 +1,5 @@
 NUM_CLASSES = 5
 EMBD_DIM = 128
 IN_PLANES = 16
-WAV_DIR = '/NASdata/AudioData/mandarin/AISHELL-2/iOS/data/wav/'
-WAV_CACHE_DIR = 'exp/wav_cache/'
+WAV_DIR = '/NASdata/AudioData/AISHELL-ASR-SSB/SPEECHDATA/'
+CACHE_DIR = 'exp/cache/'

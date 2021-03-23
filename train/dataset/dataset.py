@@ -5,7 +5,7 @@ import os
 import torch
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import Dataset
-from train.config import WAV_DIR, WAV_CACHE_DIR
+from train.config import WAV_DIR, CACHE_DIR
 
 
 def collate_fn_pad(batch):
@@ -36,35 +36,7 @@ def collate_sequential_embedding(batch):
 
 
 class SpectrogramDataset(Dataset):
-    """
-    Load extracted spectrogram
-    """
-
-    def __init__(self, wav_scp, utt2label):
-        self.wav_scp = wav_scp
-        self.utt2label = utt2label
-
-    def __len__(self):
-        return len(self.wav_scp)
-
-    def __getitem__(self, idx):
-        utt, filename = self.wav_scp[idx]
-
-        # randomly choose data augmentation
-        suffixes = ['', 'noise', 'sp09', 'sp11']
-        suffix = suffixes[random.randint(0, len(suffixes) - 1)]
-        if suffix != '':
-            filename, ext = os.path.splitext(filename)
-            filename = f'{filename}_{suffix}' + ext
-
-        signal = np.load(filename, allow_pickle=False)
-        signal = np.moveaxis(signal, 0, 1)
-        signal = torch.from_numpy(signal.astype('float32'))
-        return signal, self.utt2label[utt]
-
-
-class WavDataset(Dataset):
-    def __init__(self, data: list, wav_dir=WAV_DIR, cache_dir=WAV_CACHE_DIR, snr_range=(20, 50)):
+    def __init__(self, data: list, wav_dir=WAV_DIR, cache_dir=os.path.join(CACHE_DIR, 'spectro'), snr_range=(20, 50)):
         """
         :param data: List of (tone, utt, phone, start, dur)
         """
@@ -72,13 +44,25 @@ class WavDataset(Dataset):
         self.snr_range = snr_range
         self.wav_dir = wav_dir
         self.cache_dir = cache_dir
+        self.cache_list_path = os.path.join(self.cache_dir, 'wav.scp')
+
+        self.cache = {}
+        with open(self.cache_list_path) as f:
+            for line in f:
+                utt, path = line.replace('\n', '').split()
+                self.cache[utt] = path
+
+        self.cache_list_file = open(self.cache_list_path, 'w', buffering=1)  # line buffered
+
+    def get_spk_from_utt(self, utt: str):
+        return utt[:7]
 
     def get_wav_path(self, utt: str):
-        spk = utt[1:6]
+        spk = self.get_spk_from_utt(utt)
         return os.path.join(self.wav_dir, spk, f'{utt}.wav')
 
-    def get_cache_path(self, utt: str):
-        spk = utt[1:6]
+    def build_cache_path(self, utt: str):
+        spk = self.get_spk_from_utt(utt)
         spk_dir = os.path.join(self.cache_dir, spk)
         os.makedirs(spk_dir, exist_ok=True)
         return os.path.join(spk_dir, f'{utt}.npy')
@@ -120,21 +104,23 @@ class WavDataset(Dataset):
     def __getitem__(self, idx):
         tone, utt, phone, start, dur = self.data[idx]
 
-        path = self.get_wav_path(utt)
-        # cache_path = self.get_cache_path(utt)
-        # if os.path.exists(cache_path):
-        #     y = np.load(cache_path, allow_pickle=False)
-        # else:
-        #     y, _ = librosa.load(path, sr=16000)
-        #     np.save(cache_path, y, allow_pickle=False)
+        cache_path = self.cache.get(utt)
+        if cache_path is not None:
+            y = np.load(cache_path, allow_pickle=False)
+        else:
+            cache_path = self.build_cache_path(utt)
+            path = self.get_wav_path(utt)
 
-        y, _ = librosa.load(path, sr=16000)
-        # y, start, dur = self.aug(y, start, dur)
+            y, _ = librosa.load(path, sr=16000)
+            y = self.spectro(y, start, dur)
+            y = np.moveaxis(y, 0, 1)  # from (mels, time) to (time, mels)
 
-        signal = self.spectro(y, start, dur)
-        signal = np.moveaxis(signal, 0, 1)  # from (mels, time) to (time, mels)
-        signal = torch.from_numpy(signal.astype('float32'))
-        return signal, tone
+            np.save(cache_path, y, allow_pickle=False)
+            self.cache[utt] = cache_path
+            self.cache_list_file.write(f'{utt}\t{cache_path}\n')
+
+        y = torch.from_numpy(y.astype('float32'))
+        return y, tone
 
     def __len__(self):
         return len(self.data)
@@ -154,12 +140,12 @@ class SequentialSpectrogramDataset(Dataset):
         return len(self.sequences)
 
     def __getitem__(self, idx):
-        from feature_extraction import get_output_path
         utt, seq = self.sequences[idx]
 
         xs = []
         ys = []
         for tone, phone, start, dur in seq:
+            # FIXME
             path = get_output_path(utt, phone, start, f'feats/{tone}')
             x = np.load(path, allow_pickle=False)
             x = np.moveaxis(x, 0, 1)
