@@ -64,7 +64,7 @@ class SpectrogramDataset(Dataset):
 
 
 class WavDataset(Dataset):
-    def __init__(self, data: list, wav_dir=WAV_DIR, cache_dir=WAV_CACHE_DIR, snr_range=(15, 30)):
+    def __init__(self, data: list, wav_dir=WAV_DIR, cache_dir=WAV_CACHE_DIR, snr_range=(20, 50)):
         """
         :param data: List of (tone, utt, phone, start, dur)
         """
@@ -129,7 +129,7 @@ class WavDataset(Dataset):
         #     np.save(cache_path, y, allow_pickle=False)
 
         y, _ = librosa.load(path, sr=16000)
-        y, start, dur = self.aug(y, start, dur)
+        # y, start, dur = self.aug(y, start, dur)
 
         signal = self.spectro(y, start, dur)
         signal = np.moveaxis(signal, 0, 1)  # from (mels, time) to (time, mels)

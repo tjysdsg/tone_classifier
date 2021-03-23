@@ -23,7 +23,7 @@ parser = argparse.ArgumentParser(description='Training embedding')
 # dataset
 parser.add_argument('--data_dir', default='feats', type=str)
 parser.add_argument('--data_name', default='train', type=str)
-parser.add_argument('-j', '--workers', default=10, type=int)
+parser.add_argument('-j', '--workers', default=8, type=int)
 parser.add_argument('-b', '--batch_size', default=64, type=int)
 parser.add_argument('--val_data_name', default='val', type=str)
 parser.add_argument('--test_data_name', default='test', type=str)
