@@ -5,7 +5,7 @@ import logging
 from typing import List
 import numpy as np
 import random
-from train.modules.model_spk import ResNet34StatsPool
+from train.modules.models import ResNet34StatsPool
 
 
 def warmup_lr(lr: float, step: int, epoch_size: int, n_warmup_epochs: int):
