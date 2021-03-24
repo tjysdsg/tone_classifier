@@ -11,7 +11,7 @@ import random
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from train.modules.models import ResNet34StatsPool, TDNNStatsPool
+from train.modules.models import ResNet34StatsPool, TDNNStatsPool, BLSTMStatsPool
 from train.dataset.dataset import SpectrogramDataset, collate_fn_pad
 from train.config import NUM_CLASSES, EMBD_DIM, IN_PLANES
 
@@ -69,7 +69,8 @@ print('val size:', len(val_loader) * args.batch_size)
 
 # models
 # model = ResNet34StatsPool(IN_PLANES, EMBD_DIM, dropout=0.5).cuda()
-model = TDNNStatsPool(embedding_size=EMBD_DIM).cuda()
+# model = TDNNStatsPool(embedding_size=EMBD_DIM).cuda()
+model = BLSTMStatsPool(embedding_size=EMBD_DIM).cuda()
 classifier = nn.Linear(EMBD_DIM, NUM_CLASSES).cuda()
 
 # criterion, optimizer, scheduler

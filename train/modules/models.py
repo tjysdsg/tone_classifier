@@ -80,3 +80,23 @@ class TDNNStatsPool(nn.Module):
         x = self.segment6(x)
         x = F.relu(x)
         return x
+
+
+class BLSTMStatsPool(nn.Module):
+    def __init__(self, input_size=64, embedding_size=128):
+        super().__init__()
+        hidden_size = 256
+        self.lstm = nn.LSTM(
+            input_size=input_size, hidden_size=hidden_size, num_layers=2, batch_first=True, dropout=0.3,
+            bidirectional=True
+        )
+        self.pool = _StatsPool()
+        self.embedding = nn.Linear(2 * 2 * hidden_size, embedding_size)
+
+    def forward(self, x):
+        x, _ = self.lstm(x)
+        x = self.pool(x)
+        x = F.relu(x)
+        x = self.embedding(x)
+        x = F.relu(x)
+        return x
