@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from torch.functional import F
+import torch.nn.functional as F
 from train.modules.front_resnet import ResNet34
 from train.modules.tdnn import TDNN
 from train.modules.pooling import StatsPool, ScaleDotProductAttention
