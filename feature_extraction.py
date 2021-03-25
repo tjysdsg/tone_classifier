@@ -7,31 +7,13 @@ OUTDIR = 'feats'
 
 
 def main():
-    # SSB utterance id to aishell2 utterance id
-    ssb2utt = {}
-    with open('ssbutt.txt') as f:
-        for line in f:
-            utt, ssb = line.replace('\n', '').split('|')
-            ssb2utt[ssb] = utt
-
-    # utt of filtered wavs
-    filtered_wavs = set()
-    with open('wav_filtered.scp') as f:
-        for line in f:
-            utt = line.split('\t')[0]
-            filtered_wavs.add(utt)
-
     # utt to its phone-level transcript
     utt2trans = {}
     with open('aishell-asr-ssb-annotations.txt') as f:
         for line in f:
             tokens = line.replace('\n', '').split()
             utt = tokens[0].split('.')[0]
-            utt = ssb2utt.get(utt)
-            if utt is None or utt not in filtered_wavs:
-                continue
             phones = tokens[2::2]
-            # phones = [p.replace('5', '0') for p in phones]  # 轻声 5 -> 0
             # separate initials and finals
             utt2trans[utt] = []
             for p in phones:
@@ -44,7 +26,7 @@ def main():
                 else:
                     final = p
 
-                # 去掉儿化
+                # 分离儿化
                 if 'er' not in final and final[-2] == 'r':
                     utt2trans[utt].append(final.replace('r', ''))
                     utt2trans[utt].append('er5')
@@ -54,13 +36,11 @@ def main():
     # utt to timestamps
     utt2time = {}  # {utt: [start, dur, tone]}
     with open('phone_ctm.txt') as f:
-        prev_utt = 'fuck'
+        prev_utt = 'jfkdsjljfkdsjkoi'
         prev_dur = 0
         for line in f:
             tokens = line.split()
             utt = tokens[0]
-            if utt not in filtered_wavs:
-                continue
             if utt not in utt2time:
                 utt2time[utt] = []
 
@@ -102,12 +82,12 @@ def main():
         # collect phone boundaries from ASR and tones from annotations
         for i, p in enumerate(trans):
             tone = p[-1]
-            if not tone.isnumeric():  # initials don't have tones, using 0 to represent
-                tone = 0
+            if not tone.isnumeric():
+                tone = 0  # initials don't have tones, using 0 to represent
             else:
                 tone = int(tone)
-                if tone == 5:  # not including light tone
-                    continue
+                # if tone == 5:  # not including light tone
+                #     continue
             start = data[i][0]
             dur = data[i][1]
 
@@ -116,8 +96,8 @@ def main():
             utt2tones[utt].append([tone, p, start, dur])
             all_data.append([tone, utt, p, start, dur])
 
-    with open('all_data.json', 'w') as f:
-        json.dump(all_data, f)
+    # with open('all_data.json', 'w') as f:
+    #     json.dump(all_data, f)
     with open('utt2tones.json', 'w') as f:
         json.dump(utt2tones, f)
 
