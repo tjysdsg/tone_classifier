@@ -47,8 +47,16 @@ logger = create_logger('train_embedding', f'exp/{SAVE_DIR}/{args.action}_{args.s
 
 
 def create_dataloader(data: list, subset_size: float):
-    s = int(len(data) * subset_size)
-    data = data[:s]
+    from sklearn.model_selection import train_test_split
+    _, data = train_test_split(data, test_size=subset_size)
+
+    # count the number of each tone
+    tones = {t: 0 for t in range(NUM_CLASSES)}
+    for d in data:
+        tone = d[0]
+        tones[tone] += 1
+    print(tones)
+
     return DataLoader(
         SpectrogramDataset(data), batch_size=args.batch_size, num_workers=args.workers,
         pin_memory=True, collate_fn=collate_fn_pad,

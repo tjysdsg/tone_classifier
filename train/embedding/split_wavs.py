@@ -14,6 +14,7 @@ utts = list(utt2tones.keys())
 
 assert len(utts) >= (TRAIN_SIZE + TEST_SIZE + VAL_SIZE)
 
+random.shuffle(utts)
 train_utts = utts[:TRAIN_SIZE]
 test_utts = utts[TRAIN_SIZE:TRAIN_SIZE + TEST_SIZE]
 val_utts = utts[TRAIN_SIZE + TEST_SIZE:TRAIN_SIZE + TEST_SIZE + VAL_SIZE]
