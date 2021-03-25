@@ -1,8 +1,6 @@
-denoise_test
 tmp.*
 tmp/
 alignments/
-phone_ctm.*
 data/
 feats/
 
