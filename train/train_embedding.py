@@ -178,8 +178,8 @@ def validate() -> float:
     logger.info('Confusion Matrix:')
     logger.info(confusion)
 
-    confusion = confusion[1:, 1:]
-    logger.info(f'4 tone accuracy: {np.trace(confusion) / np.sum(confusion)}')
+    # confusion = confusion[1:, 1:]
+    # logger.info(f'4 tone accuracy: {np.trace(confusion) / np.sum(confusion)}')
 
     return accuracy_score(ys.numpy(), preds.numpy())
 
@@ -203,12 +203,14 @@ def test():
 
     logger.info(f'Test acc: {accuracy_score(ys.numpy(), preds.numpy())}')
 
+    print("ys:", ys.numpy())
+
     confusion = confusion_matrix(ys.numpy(), preds.numpy())
     logger.info('Confusion Matrix:')
     logger.info(confusion)
 
-    confusion = confusion[1:, 1:]
-    logger.info(f'4 tone accuracy: {np.trace(confusion) / np.sum(confusion)}')
+    # confusion = confusion[1:, 1:]
+    # logger.info(f'4 tone accuracy: {np.trace(confusion) / np.sum(confusion)}')
 
 
 if __name__ == '__main__':

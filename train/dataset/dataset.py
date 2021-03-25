@@ -44,6 +44,7 @@ class SpectrogramDataset(Dataset):
         self.snr_range = snr_range
         self.wav_dir = wav_dir
         self.cache_dir = cache_dir
+        os.makedirs(cache_dir, exist_ok=True)
         self.cache_list_path = os.path.join(self.cache_dir, 'wav.scp')
 
         self.cache = {}
@@ -67,9 +68,9 @@ class SpectrogramDataset(Dataset):
         os.makedirs(spk_dir, exist_ok=True)
         return os.path.join(spk_dir, f'{utt}.npy')
 
-    def spectro(self, y: np.ndarray, start: float, dur: float, sr=16000, fmin=50, fmax=350, hop_length=16):
+    def spectro(self, y: np.ndarray, start: float, dur: float, sr=16000, fmin=50, fmax=350, hop_length=16, n_fft=2048):
         S = librosa.feature.melspectrogram(
-            y=y, sr=sr, n_mels=64, n_fft=2048, hop_length=hop_length, fmin=fmin, fmax=fmax
+            y=y, sr=sr, n_mels=64, n_fft=n_fft, hop_length=hop_length, fmin=fmin, fmax=fmax
         )
         S = librosa.power_to_db(S, ref=np.max)
 

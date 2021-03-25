@@ -4,6 +4,7 @@ import json
 INITIALS = ['b', 'c', 'ch', 'd', 'f', 'g', 'h', 'j', 'k', 'l', 'm', 'n', 'p', 'q', 'r', 's', 'sh', 't', 'w', 'x', 'y',
             'z', 'zh']
 OUTDIR = 'feats'
+FRAME_SUBSAMPLING_FACTOR = 3
 
 
 def main():
@@ -44,8 +45,8 @@ def main():
             if utt not in utt2time:
                 utt2time[utt] = []
 
-            start = float(tokens[2])
-            dur = float(tokens[3])
+            start = float(tokens[2]) * FRAME_SUBSAMPLING_FACTOR
+            dur = float(tokens[3]) * FRAME_SUBSAMPLING_FACTOR
             phone = tokens[4]
             tone = phone.split('_')[-1]
 
