@@ -69,8 +69,8 @@ print('val size:', len(val_loader) * args.batch_size)
 
 # models
 # model = ResNet34StatsPool(IN_PLANES, EMBD_DIM, dropout=0.5).cuda()
-# model = TDNNStatsPool(embedding_size=EMBD_DIM).cuda()
-model = BLSTMStatsPool(embedding_size=EMBD_DIM).cuda()
+model = TDNNStatsPool(embedding_size=EMBD_DIM).cuda()
+# model = BLSTMStatsPool(embedding_size=EMBD_DIM).cuda()
 classifier = nn.Linear(EMBD_DIM, NUM_CLASSES).cuda()
 
 # criterion, optimizer, scheduler

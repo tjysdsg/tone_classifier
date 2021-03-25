@@ -4,8 +4,8 @@ import random
 
 random.seed(1024, version=2)
 
-# total number of utterances: 216794
-TRAIN_SIZE = 180000
+# total number of utterances: 619991
+TRAIN_SIZE = 100000
 TEST_SIZE = 20000
 VAL_SIZE = 10000
 
@@ -23,7 +23,9 @@ def flatten_utt2tones(utts: list):
     ret = []
     for utt in utts:
         for tone, phone, start, dur in utt2tones[utt]:
-            ret.append([tone, utt, phone, start, dur])
+            if tone != 5 and tone != 0:  # not including initials or light tone
+                tone -= 1  # tone label starts at 0
+                ret.append([tone, utt, phone, start, dur])
     random.shuffle(ret)
     return ret
 
