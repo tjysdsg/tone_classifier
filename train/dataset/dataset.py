@@ -1,6 +1,5 @@
 import numpy as np
 import librosa
-import random
 import os
 import torch
 from torch.nn.utils.rnn import pad_sequence
@@ -35,38 +34,41 @@ def collate_sequential_embedding(batch):
     return x, torch.as_tensor(y, dtype=torch.long), lengths
 
 
-class SpectrogramDataset(Dataset):
-    def __init__(self, data: list, wav_dir=WAV_DIR, cache_dir=os.path.join(CACHE_DIR, 'spectro'), snr_range=(20, 50)):
-        """
-        :param data: List of (tone, utt, phone, start, dur)
-        """
-        self.data = data
-        self.snr_range = snr_range
-        self.wav_dir = wav_dir
+def get_spk_from_utt(utt: str):
+    return utt[:7]
+
+
+def get_wav_path(utt: str):
+    spk = get_spk_from_utt(utt)
+    return os.path.join(WAV_DIR, spk, f'{utt}.wav')
+
+
+def get_spectro_id(utt: str, start: float, dur: float):
+    return f'{utt}_{start:.3f}_{dur:.3f}'
+
+
+class CachedSpectrogramExtractor:
+    def __init__(self, cache_dir: str):
         self.cache_dir = cache_dir
-        os.makedirs(cache_dir, exist_ok=True)
+        os.makedirs(self.cache_dir, exist_ok=True)
         self.cache_list_path = os.path.join(self.cache_dir, 'wav.scp')
+
+        f = open(self.cache_list_path, 'a')  # `touch wav.scp`
+        f.close()
 
         self.cache = {}
         with open(self.cache_list_path) as f:
             for line in f:
-                utt, path = line.replace('\n', '').split()
-                self.cache[utt] = path
+                spectro_id, path = line.replace('\n', '').split()
+                self.cache[spectro_id] = path
 
         self.cache_list_file = open(self.cache_list_path, 'a', buffering=1)  # line buffered
 
-    def get_spk_from_utt(self, utt: str):
-        return utt[:7]
-
-    def get_wav_path(self, utt: str):
-        spk = self.get_spk_from_utt(utt)
-        return os.path.join(self.wav_dir, spk, f'{utt}.wav')
-
-    def build_cache_path(self, utt: str):
-        spk = self.get_spk_from_utt(utt)
+    def build_cache_path(self, utt: str, start: float, dur: float):
+        spk = get_spk_from_utt(utt)
         spk_dir = os.path.join(self.cache_dir, spk)
         os.makedirs(spk_dir, exist_ok=True)
-        return os.path.join(spk_dir, f'{utt}.npy')
+        return os.path.join(spk_dir, f'{get_spectro_id(utt, start, dur)}.npy')
 
     def spectro(self, y: np.ndarray, start: float, dur: float, sr=16000, fmin=50, fmax=350, hop_length=16, n_fft=2048):
         S = librosa.feature.melspectrogram(
@@ -82,7 +84,28 @@ class SpectrogramDataset(Dataset):
 
         return S[:, s:e + 1]
 
+    def load(self, utt: str, start: float, dur: float) -> np.ndarray:
+        spectro_id = get_spectro_id(utt, start, dur)
+
+        cache_path = self.cache.get(spectro_id)
+        if cache_path is not None:
+            y = np.load(cache_path, allow_pickle=False)
+        else:
+            cache_path = self.build_cache_path(utt, start, dur)
+            path = get_wav_path(utt)
+
+            y, _ = librosa.load(path, sr=16000)
+            y = self.spectro(y, start, dur)
+            y = np.moveaxis(y, 0, 1)  # from (mels, time) to (time, mels)
+
+            np.save(cache_path, y, allow_pickle=False)
+            self.cache[spectro_id] = cache_path
+            self.cache_list_file.write(f'{spectro_id}\t{cache_path}\n')
+        return y
+
+    """
     def aug(self, y: np.ndarray, start: float, dur: float):
+        import random
         from train.dataset.aug import norm_speech, add_random_noise, speed_perturb, add_random_rir
 
         aug_type = random.choice(['noise', 'reverb', 'sp', ''])
@@ -101,25 +124,22 @@ class SpectrogramDataset(Dataset):
             y = add_random_rir(norm_speech(y))
 
         return y, start, dur
+    """
+
+
+class SpectrogramDataset(Dataset):
+    def __init__(self, data: list, snr_range=(20, 50)):
+        """
+        :param data: List of (tone, utt, phone, start, dur)
+        """
+        self.data = data
+        self.snr_range = snr_range
+        self.extractor = CachedSpectrogramExtractor(os.path.join(CACHE_DIR, 'spectro'))
 
     def __getitem__(self, idx):
         tone, utt, phone, start, dur = self.data[idx]
 
-        cache_path = self.cache.get(utt)
-        if cache_path is not None:
-            y = np.load(cache_path, allow_pickle=False)
-        else:
-            cache_path = self.build_cache_path(utt)
-            path = self.get_wav_path(utt)
-
-            y, _ = librosa.load(path, sr=16000)
-            y = self.spectro(y, start, dur)
-            y = np.moveaxis(y, 0, 1)  # from (mels, time) to (time, mels)
-
-            np.save(cache_path, y, allow_pickle=False)
-            self.cache[utt] = cache_path
-            self.cache_list_file.write(f'{utt}\t{cache_path}\n')
-
+        y = self.extractor.load(utt, start, dur)
         y = torch.from_numpy(y.astype('float32'))
         return y, tone
 
@@ -147,7 +167,7 @@ class SequentialSpectrogramDataset(Dataset):
         ys = []
         for tone, phone, start, dur in seq:
             # FIXME
-            path = get_output_path(utt, phone, start, f'feats/{tone}')
+            path = get_wav_path(utt)
             x = np.load(path, allow_pickle=False)
             x = np.moveaxis(x, 0, 1)
             x = torch.as_tensor(x, dtype=torch.float32)  # sig_len * mels
