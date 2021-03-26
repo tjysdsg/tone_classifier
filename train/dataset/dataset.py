@@ -5,7 +5,7 @@ import os
 import torch
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import Dataset
-from train.config import WAV_DIR, CACHE_DIR
+from train.config import WAV_DIR, CACHE_DIR, PRETRAINED_EMBEDDINGS_DIR
 
 
 def collate_fn_pad(batch):
@@ -160,7 +160,7 @@ class SequentialSpectrogramDataset(Dataset):
 
 
 class SequentialEmbeddingDataset(Dataset):
-    def __init__(self, utts: list, utt2tones: dict, embedding_dir='embeddings'):
+    def __init__(self, utts: list, utt2tones: dict, embedding_dir=PRETRAINED_EMBEDDINGS_DIR):
         self.utts = utts
         self.utt2tones = utt2tones
         self.embedding_dir = embedding_dir

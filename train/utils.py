@@ -8,6 +8,12 @@ import random
 from train.modules.models import ResNet34StatsPool
 
 
+def onehot_encode(idx: int, num_classes: int) -> np.ndarray:
+    ret = np.zeros(num_classes)
+    ret[idx] = 1
+    return ret
+
+
 def warmup_lr(lr: float, step: int, epoch_size: int, n_warmup_epochs: int):
     return lr / (epoch_size * n_warmup_epochs) * (step + 1)
 

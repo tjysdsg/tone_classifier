@@ -27,7 +27,7 @@ parser.add_argument('-j', '--workers', default=8, type=int)
 parser.add_argument('-b', '--batch_size', default=64, type=int)
 parser.add_argument('--val_data_name', default='val', type=str)
 parser.add_argument('--test_data_name', default='test', type=str)
-parser.add_argument('--train_subset_size', default=0.03, type=float)
+parser.add_argument('--train_subset_size', default=0.1, type=float)
 parser.add_argument('--test_subset_size', default=0.1, type=float)
 parser.add_argument('--val_subset_size', default=0.1, type=float)
 # learning rate scheduler
@@ -48,7 +48,7 @@ logger = create_logger('train_embedding', f'exp/{SAVE_DIR}/{args.action}_{args.s
 
 def create_dataloader(data: list, subset_size: float):
     from sklearn.model_selection import train_test_split
-    _, data = train_test_split(data, test_size=subset_size)
+    _, data = train_test_split(data, test_size=subset_size, random_state=42)
 
     # count the number of each tone
     tones = {t: 0 for t in range(NUM_CLASSES)}
@@ -76,8 +76,8 @@ print('test size:', len(test_loader) * args.batch_size)
 print('val size:', len(val_loader) * args.batch_size)
 
 # models
-# model = ResNet34StatsPool(IN_PLANES, EMBD_DIM, dropout=0.5).cuda()
-model = TDNNStatsPool(embedding_size=EMBD_DIM).cuda()
+model = ResNet34StatsPool(IN_PLANES, EMBD_DIM, dropout=0.5).cuda()
+# model = TDNNStatsPool(embedding_size=EMBD_DIM).cuda()
 # model = BLSTMStatsPool(embedding_size=EMBD_DIM).cuda()
 classifier = nn.Linear(EMBD_DIM, NUM_CLASSES).cuda()
 
