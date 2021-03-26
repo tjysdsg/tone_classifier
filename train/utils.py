@@ -5,7 +5,6 @@ import logging
 from typing import List
 import numpy as np
 import random
-from train.modules.models import ResNet34StatsPool
 
 
 def onehot_encode(idx: int, num_classes: int) -> np.ndarray:
@@ -38,17 +37,6 @@ def load_transformer_data():
     utts_train, utts_test = train_test_split(utts, test_size=0.25)
     utts_train, utts_val = train_test_split(utts_train, test_size=0.1)
     return utt2tones, utts_train, utts_test, utts_val
-
-
-def load_embedding_model(epoch: int, in_planes: int, embd_dim: int) -> ResNet34StatsPool:
-    print(f'loading exp/embedding/model_{epoch}.pkl')
-    model = ResNet34StatsPool(in_planes, embd_dim).cuda()
-    checkpoint = torch.load(f'exp/embedding/model_{epoch}.pkl')
-    model.load_state_dict(checkpoint['model'])
-    model.eval()
-    for param in model.parameters():
-        param.requires_grad = False
-    return model
 
 
 def set_seed(seed):

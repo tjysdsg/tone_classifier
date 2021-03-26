@@ -36,6 +36,13 @@ test = flatten_utt2tones(test_utts)
 val = flatten_utt2tones(val_utts)
 
 os.makedirs('data_embedding/', exist_ok=True)
+with open('data_embedding/train_utts.json', 'w') as f:
+    json.dump(train_utts, f)
+with open('data_embedding/test_utts.json', 'w') as f:
+    json.dump(test_utts, f)
+with open('data_embedding/val_utts.json', 'w') as f:
+    json.dump(val_utts, f)
+
 with open('data_embedding/train.json', 'w') as f:
     json.dump(train, f)
 with open('data_embedding/test.json', 'w') as f:

@@ -148,9 +148,10 @@ class SpectrogramDataset(Dataset):
 
 
 class SequentialSpectrogramDataset(Dataset):
-    def __init__(self, utts: list, utt2tones: dict):
-        self.utts = utts
+    def __init__(self, utt2tones: dict):
+        self.utts = list(utt2tones.keys())
         self.utt2tones = utt2tones
+        self.extractor = CachedSpectrogramExtractor(os.path.join(CACHE_DIR, 'spectro'))
 
         self.sequences = []
         for utt in self.utts:
@@ -166,11 +167,8 @@ class SequentialSpectrogramDataset(Dataset):
         xs = []
         ys = []
         for tone, phone, start, dur in seq:
-            # FIXME
-            path = get_wav_path(utt)
-            x = np.load(path, allow_pickle=False)
-            x = np.moveaxis(x, 0, 1)
-            x = torch.as_tensor(x, dtype=torch.float32)  # sig_len * mels
+            x = self.extractor.load(utt, start, dur)
+            x = torch.from_numpy(x.astype('float32'))
             xs.append(x)
             ys.append(tone)
 
