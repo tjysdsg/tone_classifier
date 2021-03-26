@@ -53,7 +53,7 @@ class SpectrogramDataset(Dataset):
                 utt, path = line.replace('\n', '').split()
                 self.cache[utt] = path
 
-        self.cache_list_file = open(self.cache_list_path, 'w', buffering=1)  # line buffered
+        self.cache_list_file = open(self.cache_list_path, 'a', buffering=1)  # line buffered
 
     def get_spk_from_utt(self, utt: str):
         return utt[:7]
