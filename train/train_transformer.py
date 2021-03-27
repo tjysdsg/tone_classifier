@@ -1,4 +1,5 @@
 import os
+import numpy as np
 import json
 import argparse
 from tqdm import trange
@@ -140,7 +141,7 @@ def train():
 
         save_transformer_checkpoint(f'exp/{SAVE_DIR}', epoch, model, optimizer, scheduler)
 
-        acc_val = validate()
+        acc_val = validate(val_loader)
         logger.info(
             '\nEpoch %d\t  Loss %.4f\t  Accuracy %3.3f\t  lr %f\t  acc_val %3.3f\n'
             % (epoch, float(losses.avg), float(acc.avg), get_lr(optimizer), acc_val)
@@ -149,53 +150,46 @@ def train():
         scheduler.step(losses.avg)
 
 
-def validate() -> float:
-    logger.info('============== VALIDATING ==============')
+def validate(dataloader: DataLoader) -> float:
     model.eval()
 
     acc = AverageMeter()
+    ys = []
+    preds = []
     with torch.no_grad():
-        for j, (x, y) in enumerate(val_loader):
+        for j, (packed, y) in enumerate(dataloader):
+            items = list(zip(*packed))
+            xs = items[0]  # (utts, seq_len', sig_len', mels)
+            lengths = items[1]
+
             y = y.cpu()
-            y_pred, padding_mask = model(x)
+            y_pred, padding_mask = model(packed)
             y_pred = y_pred.cpu()
             padding_mask = padding_mask.cpu()
 
             acc.update(masked_accuracy(y_pred, y, padding_mask), y.size(0))
 
-    return acc.avg
+            for i in range(len(xs)):
+                label = y[i, :lengths[i]]
+                pred = torch.argmax(y_pred[i][:lengths[i]], dim=-1)
 
-
-def test():
-    from sklearn.metrics import confusion_matrix
-
-    logger.info('============== TESTING ==============')
-    model.eval()
-
-    ys = []
-    preds = []
-    with torch.no_grad():
-        for j, (x, y) in enumerate(test_loader):
-            y_pred, _ = model(x)
-            y = y.cpu()
-            y_pred = torch.argmax(y_pred, dim=-1).cpu()
-
-            for i in range(x.shape[0]):
-                # FIXME
-                ys.append(y[i][:lengths[i]])
-                preds.append(y_pred[i][:lengths[i]])
+                ys.append(label)
+                preds.append(pred)
 
     ys = torch.cat(ys)
     preds = torch.cat(preds)
-
     logger.info('Confusion Matrix:')
-    logger.info(confusion_matrix(ys.numpy(), preds.numpy()))
+    confusion = confusion_matrix(ys.numpy(), preds.numpy())
+    logger.info(f'\n{confusion}')
+    print(acc.avg)
+
+    return acc.avg
 
 
 if __name__ == '__main__':
     if args.action == 'train':
         train()
     elif args.action == 'test':
-        test()
+        validate(test_loader)
     else:
         raise RuntimeError(f"Unknown action: {args.action}")
