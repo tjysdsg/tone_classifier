@@ -2,9 +2,10 @@ import numpy as np
 import librosa
 import os
 import torch
-from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence
+from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import Dataset
 from train.config import WAV_DIR, CACHE_DIR, PRETRAINED_EMBEDDINGS_DIR
+from typing import List
 
 
 def collate_fn_pad(batch):
@@ -16,15 +17,22 @@ def collate_fn_pad(batch):
     return x, y
 
 
+def pad_seq(labels: List[torch.Tensor], padding_value=0) -> torch.Tensor:
+    max_len = np.max([e.shape[0] for e in labels])
+    ret = torch.full((len(labels), max_len), padding_value)
+    for i, e in enumerate(labels):
+        len_e = e.shape[0]
+        ret[i, :len_e] = e
+    return ret
+
+
 def collate_sequential_spectrogram(batch):
     transposed: list = list(zip(*batch))
-    x = transposed[0]  # (batch_size, seq_len, ...)
-    lengths = [len(e) for e in x]
-    x = pad_sequence(x, batch_first=True)
-    x = pack_padded_sequence(x, lengths, batch_first=True, enforce_sorted=False)
+    spectrograms = transposed[0]  # (batch_size, seq_len, ...)
+    x = [[e, e.shape[0]] for e in spectrograms]
 
     y = transposed[1]  # (batch_size, seq_len)
-    y = pad_sequence(y, batch_first=True, padding_value=-100)  # -100 is ignored by NLLLoss
+    y = pad_seq(y, padding_value=-100)  # -100 is ignored by NLLLoss
 
     return x, torch.as_tensor(y, dtype=torch.long)
 
@@ -195,7 +203,7 @@ class SequentialSpectrogramDataset(Dataset):
             ys.append(tone)
 
         x = pad_sequence(xs, batch_first=True)  # (seq_len, sig_len, mels)
-        y = np.asarray(ys, dtype='int64')  # (seq_len,)
+        y = torch.as_tensor(ys, dtype=torch.long)  # (seq_len,)
         return x, y
 
 

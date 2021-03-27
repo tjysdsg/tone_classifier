@@ -1,10 +1,13 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.utils.data import DataLoader
+
+from train.dataset.dataset import collate_sequential_spectrogram
 from train.modules.front_resnet import ResNet34
 from train.modules.tdnn import TDNN
 from train.modules.pooling import StatsPool, ScaleDotProductAttention
-from torch.nn.utils.rnn import PackedSequence, pad_packed_sequence
+from torch.nn.utils.rnn import PackedSequence, pad_packed_sequence, pad_sequence
 
 
 class ResNet34StatsPool(nn.Module):
@@ -109,16 +112,22 @@ class ContextualModel(nn.Module):
         self.embd_model = embd_model
         self.model = model
 
-    def forward(self, packed: PackedSequence):
+    def forward(self, packed):
         """
         X shape: (utts, seq_len, time, mels)
         """
-        x, lengths = pad_packed_sequence(packed, batch_first=True)
-        x = x.cuda()
-        assert len(x.shape) == 4
+        self.embd_model.eval()
 
-        x.view(x.shape[0] * x.shape[1], x.shape[2], x.shape[3])  # (utts * seq_len, time, mels)
-        embd = self.embd_model(x)
-        embd.view(x.shape[0], x.shape[1], x.shape[2], x.shape[3])  # (utts, seq_len, embd_size)
+        items = list(zip(*packed))
+        xs = items[0]  # (utts, seq_len', sig_len', mels)
+        lengths = items[1]
 
-        return self.model(embd, lengths)
+        embds = []
+        for x in xs:
+            x = x.type(torch.float32).cuda()  # (seq_len, sig_len, mels)
+
+            embd = self.embd_model(x)
+            embds.append(embd)  # embds: (utt, seq_len', embd_size)
+
+        feat = pad_sequence(embds, batch_first=True)
+        return self.model(feat, lengths)
