@@ -37,18 +37,6 @@ def collate_sequential_spectrogram(batch):
     return x, torch.as_tensor(y, dtype=torch.long)
 
 
-def collate_sequential_embedding(batch):
-    transposed: list = list(zip(*batch))
-    x: list = transposed[0]  # (batch_size, seq_len, embd_size)
-    lengths = [len(e) for e in x]
-
-    y = transposed[1]  # (batch_size, seq_len)
-    x = pad_sequence(x, batch_first=True)
-    y = pad_sequence(y, batch_first=True, padding_value=-100)  # -100 is ignored by NLLLoss
-
-    return x, torch.as_tensor(y, dtype=torch.long), lengths
-
-
 def get_spk_from_utt(utt: str):
     return utt[:7]
 
@@ -56,10 +44,6 @@ def get_spk_from_utt(utt: str):
 def get_wav_path(utt: str):
     spk = get_spk_from_utt(utt)
     return os.path.join(WAV_DIR, spk, f'{utt}.wav')
-
-
-def get_spectro_id(utt: str, start: float, dur: float):
-    return f'{utt}_{start:.3f}_{dur:.3f}'
 
 
 class CachedSpectrogramExtractor:
@@ -205,31 +189,3 @@ class SequentialSpectrogramDataset(Dataset):
         x = pad_sequence(xs, batch_first=True)  # (seq_len, sig_len, mels)
         y = torch.as_tensor(ys, dtype=torch.long)  # (seq_len,)
         return x, y
-
-
-class SequentialEmbeddingDataset(Dataset):
-    def __init__(self, utts: list, utt2tones: dict, embedding_dir=PRETRAINED_EMBEDDINGS_DIR):
-        self.utts = utts
-        self.utt2tones = utt2tones
-        self.embedding_dir = embedding_dir
-
-        self.sequences = []
-        for utt in self.utts:
-            data = self.utt2tones[utt]
-            self.sequences.append((utt, data))
-
-    def __len__(self):
-        return len(self.sequences)
-
-    def __getitem__(self, idx):
-        utt, seq = self.sequences[idx]
-        path = os.path.join(self.embedding_dir, f'{utt}.npy')
-        embeddings = np.load(path, allow_pickle=False)
-        xs = embeddings[:len(seq)]
-
-        ys = []
-        for tone, phone, start, dur in seq:
-            ys.append(tone)
-
-        # (seq_len, embd_size) and (seq_len,)
-        return torch.as_tensor(xs, dtype=torch.float32), torch.as_tensor(ys, dtype=torch.long)

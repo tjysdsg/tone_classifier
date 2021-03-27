@@ -1,13 +1,10 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.utils.data import DataLoader
-
-from train.dataset.dataset import collate_sequential_spectrogram
 from train.modules.front_resnet import ResNet34
 from train.modules.tdnn import TDNN
 from train.modules.pooling import StatsPool, ScaleDotProductAttention
-from torch.nn.utils.rnn import PackedSequence, pad_packed_sequence, pad_sequence
+from torch.nn.utils.rnn import pad_sequence
 
 
 class ResNet34StatsPool(nn.Module):
