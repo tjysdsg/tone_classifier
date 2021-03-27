@@ -2,7 +2,7 @@ import numpy as np
 import librosa
 import os
 import torch
-from torch.nn.utils.rnn import pad_sequence
+from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence
 from torch.utils.data import Dataset
 from train.config import WAV_DIR, CACHE_DIR, PRETRAINED_EMBEDDINGS_DIR
 
@@ -18,8 +18,15 @@ def collate_fn_pad(batch):
 
 def collate_sequential_spectorgram(batch):
     transposed: list = list(zip(*batch))
-    utts, xs, ys = transposed
-    return utts, xs, ys
+    x = transposed[0]  # (batch_size, seq_len, ...)
+    lengths = [len(e) for e in x]
+    x = pad_sequence(x, batch_first=True)
+    x = pack_padded_sequence(x, lengths, batch_first=True, enforce_sorted=False)
+
+    y = transposed[1]  # (batch_size, seq_len)
+    y = pad_sequence(y, batch_first=True, padding_value=-100)  # -100 is ignored by NLLLoss
+
+    return x, torch.as_tensor(y, dtype=torch.long)
 
 
 def collate_sequential_embedding(batch):
@@ -174,7 +181,8 @@ class SequentialSpectrogramDataset(Dataset):
 
         # xs: (seq_len, sig_len, mels)
         # ys: (seq_len,)
-        return utt, xs, ys
+        # return utt, xs, ys
+        return pad_sequence(xs, batch_first=True), ys
 
 
 class SequentialEmbeddingDataset(Dataset):

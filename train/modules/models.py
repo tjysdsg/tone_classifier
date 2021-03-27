@@ -4,6 +4,7 @@ import torch.nn.functional as F
 from train.modules.front_resnet import ResNet34
 from train.modules.tdnn import TDNN
 from train.modules.pooling import StatsPool, ScaleDotProductAttention
+from torch.nn.utils.rnn import PackedSequence, pad_packed_sequence
 
 
 class ResNet34StatsPool(nn.Module):
@@ -100,3 +101,24 @@ class BLSTMStatsPool(nn.Module):
         x = self.embedding(x)
         x = F.relu(x)
         return x
+
+
+class ContextualModel(nn.Module):
+    def __init__(self, embd_model: nn.Module, model: nn.Module):
+        super().__init__()
+        self.embd_model = embd_model
+        self.model = model
+
+    def forward(self, packed: PackedSequence):
+        """
+        X shape: (utts, seq_len, time, mels)
+        """
+        x, lengths = pad_packed_sequence(packed, batch_first=True)
+        x = x.cuda()
+        assert len(x.shape) == 4
+
+        x.view(x.shape[0] * x.shape[1], x.shape[2], x.shape[3])  # (utts * seq_len, time, mels)
+        embd = self.embd_model(x)
+        embd.view(x.shape[0], x.shape[1], x.shape[2], x.shape[3])  # (utts, seq_len, embd_size)
+
+        return self.model(embd, lengths)

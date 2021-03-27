@@ -28,17 +28,6 @@ def get_padding_mask(x: torch.Tensor, lengths: List[int]) -> torch.Tensor:
     return padding_mask
 
 
-def load_transformer_data():
-    from sklearn.model_selection import train_test_split
-    import json
-
-    utt2tones = json.load(open('utt2tones_fixed.json'))
-    utts = list(utt2tones.keys())
-    utts_train, utts_test = train_test_split(utts, test_size=0.25)
-    utts_train, utts_val = train_test_split(utts_train, test_size=0.1)
-    return utt2tones, utts_train, utts_test, utts_val
-
-
 def set_seed(seed):
     np.random.seed(seed)
     random.seed(seed)
@@ -136,7 +125,7 @@ def create_logger(name: str, log_file: str) -> logging.Logger:
 
     formatter = logging.Formatter(fmt='[%(levelname)s] %(asctime)s: %(message)s', datefmt='%Y-%m-%d-%H-%M-%S')
 
-    file_handler = logging.FileHandler(log_file)
+    file_handler = logging.FileHandler(log_file, mode='a')
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
     stdout_handler = logging.StreamHandler(sys.stdout)

@@ -45,7 +45,7 @@ class TransEncoder(nn.Module):
 
         self.fc = nn.Linear(embedding_size, num_classes)
 
-    def forward(self, x, lengths):  # FIXME: lengths has different size than x if training on multiple GPUs
+    def forward(self, x, lengths):
         # build src_key_padding_mask
         x = x.cuda()
         padding_mask = get_padding_mask(x, lengths).cuda()

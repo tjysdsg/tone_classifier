@@ -1,22 +1,24 @@
 import os
+import json
 import argparse
 from tqdm import trange
 from sklearn.metrics import confusion_matrix
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-from train.dataset.dataset import SequentialEmbeddingDataset, collate_sequential_embedding
+from train.dataset.dataset import SequentialSpectrogramDataset, collate_sequential_spectorgram
 from train.modules.transformers import TransEncoder
+from train.modules.models import ContextualModel
 from train.utils import (
     set_seed, AverageMeter, masked_accuracy, save_transformer_checkpoint, get_lr, create_logger,
-    load_transformer_data,
 )
 import torch
 import torch.nn as nn
-from train.config import NUM_CLASSES, EMBD_DIM, IN_PLANES
+from train.config import EMBD_DIM, IN_PLANES
 
-# create output dir
+NUM_CLASSES = 6  # include initials and light tone, unlike embedding model
 SAVE_DIR = 'transformer'
 MAX_GRAD_NORM = 10
+EMBD_MODEL_EPOCH = 23
 os.makedirs(f'exp/{SAVE_DIR}', exist_ok=True)
 
 parser = argparse.ArgumentParser(description='Train embedding on transformer')
@@ -26,6 +28,9 @@ parser.add_argument('--data_name', default='train', type=str)
 parser.add_argument('-j', '--workers', default=20, type=int)
 parser.add_argument('-b', '--batch_size', default=64, type=int)
 parser.add_argument('--val_data_name', default='val', type=str)
+parser.add_argument('--train_subset_size', default=0.15, type=float)
+parser.add_argument('--test_subset_size', default=0.15, type=float)
+parser.add_argument('--val_subset_size', default=0.15, type=float)
 parser.add_argument('--embedding_dir', default='embeddings', type=str)
 parser.add_argument('--epochs', default=500, type=int)
 parser.add_argument('--start_epoch', default=0, type=int)
@@ -36,24 +41,54 @@ set_seed(args.seed)
 
 logger = create_logger('train_transformer', f'exp/{SAVE_DIR}/{args.action}_{args.start_epoch}.log')
 
-utt2tones, utts_train, utts_test, utts_val = load_transformer_data()
+utt2tones: dict = json.load(open('utt2tones.json'))
+
+
+def create_dataloader(utts: list, subset_size: float):
+    from sklearn.model_selection import train_test_split
+    _, utts = train_test_split(utts, test_size=subset_size, random_state=42)
+    u2t = {u: utt2tones[u] for u in utts}
+
+    # count the number of each tone
+    tones = {t: 0 for t in range(NUM_CLASSES)}
+    for u, t in u2t.items():
+        for d in t:
+            tone = d[0]
+            tones[tone] += 1
+    print(tones)
+
+    return DataLoader(
+        SequentialSpectrogramDataset(u2t), batch_size=args.batch_size, num_workers=args.workers,
+        pin_memory=True, collate_fn=collate_sequential_spectorgram,
+    )
+
 
 # datasets
-train_loader = DataLoader(
-    SequentialEmbeddingDataset(utts_train, utt2tones, embedding_dir=args.embedding_dir),
-    batch_size=args.batch_size, num_workers=args.workers, pin_memory=True, collate_fn=collate_sequential_embedding,
-)
-val_loader = DataLoader(
-    SequentialEmbeddingDataset(utts_val, utt2tones, embedding_dir=args.embedding_dir),
-    batch_size=args.batch_size, num_workers=args.workers, pin_memory=True, collate_fn=collate_sequential_embedding,
-)
-test_loader = DataLoader(
-    SequentialEmbeddingDataset(utts_test, utt2tones, embedding_dir=args.embedding_dir),
-    batch_size=args.batch_size, num_workers=args.workers, pin_memory=True, collate_fn=collate_sequential_embedding,
-)
+data_train: list = json.load(open('data_embedding/train_utts.json'))
+data_test: list = json.load(open('data_embedding/test_utts.json'))
+data_val: list = json.load(open('data_embedding/val_utts.json'))
+train_loader = create_dataloader(data_train, args.train_subset_size)
+val_loader = create_dataloader(data_val, args.val_subset_size)
+test_loader = create_dataloader(data_test, args.test_subset_size)
+
+
+def load_resnet_embedding_model(model_name: str, epoch: int, in_planes: int, embd_dim: int):
+    from train.modules.models import ResNet34StatsPool
+
+    print(f'loading exp/{model_name}/model_{epoch}.pkl')
+    ret = ResNet34StatsPool(in_planes, embd_dim).cuda()
+    ckpt = torch.load(f'exp/{model_name}/model_{epoch}.pkl')
+    ret.load_state_dict(ckpt['model'])
+    ret.eval()
+    for param in ret.parameters():
+        param.requires_grad = False
+    return ret
+
 
 # model, optimizer, criterion, scheduler, trainer
-model = TransEncoder(num_classes=NUM_CLASSES, embedding_size=EMBD_DIM).cuda()
+embd_model = load_resnet_embedding_model('embedding', EMBD_MODEL_EPOCH, IN_PLANES, EMBD_DIM).cuda()
+trans_encoder = TransEncoder(num_classes=NUM_CLASSES, embedding_size=EMBD_DIM).cuda()
+model = ContextualModel(embd_model=embd_model, model=trans_encoder)
 optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.8)
 criterion = nn.CrossEntropyLoss(ignore_index=-100, reduction='sum').cuda()
 scheduler = ReduceLROnPlateau(optimizer, patience=4, verbose=True)
@@ -79,10 +114,9 @@ def train():
         t = trange(len(train_loader))
         t.set_description(f'epoch {epoch}')
 
-        for i, (x, y, lengths) in enumerate(train_loader):
-            x = x.cuda()
+        for i, (x, y) in enumerate(train_loader):
             y = y.cuda()
-            y_pred, padding_mask = model(x, lengths)
+            y_pred, padding_mask = model(x)
             n_samples = y_pred.numel() - torch.sum(padding_mask)
 
             loss = criterion(torch.flatten(y_pred, 0, 1), torch.flatten(y, 0, 1)) / n_samples
@@ -121,9 +155,9 @@ def validate() -> float:
 
     acc = AverageMeter()
     with torch.no_grad():
-        for j, (x, y, lengths) in enumerate(val_loader):
+        for j, (x, y) in enumerate(val_loader):
             y = y.cpu()
-            y_pred, padding_mask = model(x, lengths)
+            y_pred, padding_mask = model(x)
             y_pred = y_pred.cpu()
             padding_mask = padding_mask.cpu()
 
@@ -141,12 +175,13 @@ def test():
     ys = []
     preds = []
     with torch.no_grad():
-        for j, (x, y, lengths) in enumerate(test_loader):
-            y_pred, _ = model(x, lengths)
+        for j, (x, y) in enumerate(test_loader):
+            y_pred, _ = model(x)
             y = y.cpu()
             y_pred = torch.argmax(y_pred, dim=-1).cpu()
 
             for i in range(x.shape[0]):
+                # FIXME
                 ys.append(y[i][:lengths[i]])
                 preds.append(y_pred[i][:lengths[i]])
 
