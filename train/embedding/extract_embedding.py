@@ -3,7 +3,7 @@ from tqdm import tqdm
 import numpy as np
 import os
 from torch.utils.data import DataLoader
-from train.dataset.dataset import SequentialSpectrogramDataset, collate_sequential_spectorgram
+from train.dataset.dataset import SequentialSpectrogramDataset, collate_sequential_spectrogram
 from train.modules.models import ResNet34StatsPool
 import json
 import torch.multiprocessing
@@ -37,7 +37,7 @@ utt2tones = {u: utt2tones[u] for u in utts}
 print('Size:', len(utt2tones))
 loader = DataLoader(
     SequentialSpectrogramDataset(utt2tones), batch_size=BATCH_SIZE, num_workers=20, pin_memory=True,
-    collate_fn=collate_sequential_spectorgram,
+    collate_fn=collate_sequential_spectrogram,
 )
 
 

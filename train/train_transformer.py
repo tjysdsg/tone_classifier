@@ -5,7 +5,7 @@ from tqdm import trange
 from sklearn.metrics import confusion_matrix
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-from train.dataset.dataset import SequentialSpectrogramDataset, collate_sequential_spectorgram
+from train.dataset.dataset import SequentialSpectrogramDataset, collate_sequential_spectrogram
 from train.modules.transformers import TransEncoder
 from train.modules.models import ContextualModel
 from train.utils import (
@@ -59,7 +59,7 @@ def create_dataloader(utts: list, subset_size: float):
 
     return DataLoader(
         SequentialSpectrogramDataset(u2t), batch_size=args.batch_size, num_workers=args.workers,
-        pin_memory=True, collate_fn=collate_sequential_spectorgram,
+        pin_memory=True, collate_fn=collate_sequential_spectrogram,
     )
 
 

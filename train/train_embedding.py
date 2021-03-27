@@ -16,7 +16,7 @@ from train.dataset.dataset import SpectrogramDataset, collate_fn_pad
 from train.config import NUM_CLASSES, EMBD_DIM, IN_PLANES
 
 # create output dir
-SAVE_DIR = 'embedding'
+SAVE_DIR = 'embedding_tmp'
 os.makedirs(f'exp/{SAVE_DIR}', exist_ok=True)
 
 parser = argparse.ArgumentParser(description='Training embedding')

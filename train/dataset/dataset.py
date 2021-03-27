@@ -16,7 +16,7 @@ def collate_fn_pad(batch):
     return x, y
 
 
-def collate_sequential_spectorgram(batch):
+def collate_sequential_spectrogram(batch):
     transposed: list = list(zip(*batch))
     x = transposed[0]  # (batch_size, seq_len, ...)
     lengths = [len(e) for e in x]
@@ -55,7 +55,13 @@ def get_spectro_id(utt: str, start: float, dur: float):
 
 
 class CachedSpectrogramExtractor:
-    def __init__(self, cache_dir: str):
+    def __init__(self, cache_dir: str, sr=16000, fmin=50, fmax=350, hop_length=16, n_fft=2048):
+        self.sr = sr
+        self.fmin = fmin
+        self.fmax = fmax
+        self.hop_length = hop_length
+        self.n_fft = n_fft
+
         self.cache_dir = cache_dir
         os.makedirs(self.cache_dir, exist_ok=True)
         self.cache_list_path = os.path.join(self.cache_dir, 'wav.scp')
@@ -71,43 +77,52 @@ class CachedSpectrogramExtractor:
 
         self.cache_list_file = open(self.cache_list_path, 'a', buffering=1)  # line buffered
 
-    def build_cache_path(self, utt: str, start: float, dur: float):
+    # def build_cache_path(self, utt: str, start: float, dur: float):
+    #     spk = get_spk_from_utt(utt)
+    #     spk_dir = os.path.join(self.cache_dir, spk)
+    #     os.makedirs(spk_dir, exist_ok=True)
+    #     return os.path.join(spk_dir, f'{get_spectro_id(utt, start, dur)}.npy')
+
+    def build_cache_path(self, utt: str):
         spk = get_spk_from_utt(utt)
         spk_dir = os.path.join(self.cache_dir, spk)
         os.makedirs(spk_dir, exist_ok=True)
-        return os.path.join(spk_dir, f'{get_spectro_id(utt, start, dur)}.npy')
+        return os.path.join(spk_dir, f'{utt}.npy')
 
-    def spectro(self, y: np.ndarray, start: float, dur: float, sr=16000, fmin=50, fmax=350, hop_length=16, n_fft=2048):
+    def spectro(self, y: np.ndarray):
         S = librosa.feature.melspectrogram(
-            y=y, sr=sr, n_mels=64, n_fft=n_fft, hop_length=hop_length, fmin=fmin, fmax=fmax
+            y=y, sr=self.sr, n_mels=64, n_fft=self.n_fft, hop_length=self.hop_length, fmin=self.fmin, fmax=self.fmax
         )
         S = librosa.power_to_db(S, ref=np.max)
+        return np.asarray(S, dtype='float32')
 
+    def chop_spectro(self, S: np.ndarray, start: float, dur: float):
         # crop to the start and the end of a phone
         end = start + dur
-        s, e = librosa.time_to_frames([start, end], sr=sr, hop_length=hop_length)
+        s, e = librosa.time_to_frames([start, end], sr=self.sr, hop_length=self.hop_length)
         s = np.max(s, 0)
         e = np.max(e, 0)
-
-        return S[:, s:e + 1]
+        S = S[:, s:e + 1]
+        S = np.moveaxis(S, 0, 1)  # from (mels, time) to (time, mels)
+        return S
 
     def load(self, utt: str, start: float, dur: float) -> np.ndarray:
-        spectro_id = get_spectro_id(utt, start, dur)
-
-        cache_path = self.cache.get(spectro_id)
+        cache_path = self.cache.get(utt)
         if cache_path is not None:
             y = np.load(cache_path, allow_pickle=False)
+            y = self.chop_spectro(y, start, dur)
         else:
-            cache_path = self.build_cache_path(utt, start, dur)
+            cache_path = self.build_cache_path(utt)
             path = get_wav_path(utt)
 
             y, _ = librosa.load(path, sr=16000)
-            y = self.spectro(y, start, dur)
-            y = np.moveaxis(y, 0, 1)  # from (mels, time) to (time, mels)
-
+            y = self.spectro(y)
             np.save(cache_path, y, allow_pickle=False)
-            self.cache[spectro_id] = cache_path
-            self.cache_list_file.write(f'{spectro_id}\t{cache_path}\n')
+
+            y = self.chop_spectro(y, start, dur)
+
+            self.cache[utt] = cache_path
+            self.cache_list_file.write(f'{utt}\t{cache_path}\n')
         return y
 
     """
@@ -179,10 +194,9 @@ class SequentialSpectrogramDataset(Dataset):
             xs.append(x)
             ys.append(tone)
 
-        # xs: (seq_len, sig_len, mels)
-        # ys: (seq_len,)
-        # return utt, xs, ys
-        return pad_sequence(xs, batch_first=True), ys
+        x = pad_sequence(xs, batch_first=True)  # (seq_len, sig_len, mels)
+        y = np.asarray(ys, dtype='int64')  # (seq_len,)
+        return x, y
 
 
 class SequentialEmbeddingDataset(Dataset):
