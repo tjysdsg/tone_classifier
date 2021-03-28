@@ -2,7 +2,7 @@ import torch
 from typing import List
 import torch.nn as nn
 import torch.nn.functional as F
-from train.modules.front_resnet import ResNet34
+from train.modules.resnet import ResNet34
 from train.modules.tdnn import TDNN
 from train.modules.pooling import StatsPool, ScaleDotProductAttention
 from train.dataset.dataset import SpectroFeat
