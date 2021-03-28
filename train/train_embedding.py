@@ -166,7 +166,7 @@ def validate(dataloader: DataLoader) -> float:
     with torch.no_grad():
         for j, (x, y) in enumerate(dataloader):
             y = y.cpu()
-            y_pred = classifier(model(x)).cpu()
+            y_pred = classifier(model(x.cuda())).cpu()
             ys.append(y)
             preds.append(torch.argmax(y_pred, dim=-1))
 
