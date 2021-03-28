@@ -11,13 +11,16 @@ import random
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from train.modules.models import ResNet34StatsPool, TDNNStatsPool, BLSTMStatsPool
-from train.dataset.dataset import SpectrogramDataset, collate_fn_pad
+from train.modules.models import *
+from train.dataset.dataset import collate_spectrogram, PhoneSegmentDataset
 from train.config import NUM_CLASSES, EMBD_DIM, IN_PLANES
 
+torch.multiprocessing.set_sharing_strategy('file_system')
+
 # create output dir
-SAVE_DIR = 'embedding'
+SAVE_DIR = 'embedding_dur_onehot'
 os.makedirs(f'exp/{SAVE_DIR}', exist_ok=True)
+DATA_DIR = 'data_embedding_6t'
 
 parser = argparse.ArgumentParser(description='Training embedding')
 # dataset
@@ -58,15 +61,15 @@ def create_dataloader(data: list, subset_size: float):
     print(tones)
 
     return DataLoader(
-        SpectrogramDataset(data), batch_size=args.batch_size, num_workers=args.workers,
-        pin_memory=True, collate_fn=collate_fn_pad,
+        PhoneSegmentDataset(data, feat_type='spectrogram', include_dur=True, include_onehot=True),
+        batch_size=args.batch_size, num_workers=args.workers, collate_fn=collate_spectrogram,
     )
 
 
 # data loaders
-data_train: list = json.load(open('data_embedding/train.json'))
-data_test: list = json.load(open('data_embedding/test.json'))
-data_val: list = json.load(open('data_embedding/val.json'))
+data_train: list = json.load(open(f'{DATA_DIR}/train.json'))
+data_test: list = json.load(open(f'{DATA_DIR}/test.json'))
+data_val: list = json.load(open(f'{DATA_DIR}/val.json'))
 train_loader = create_dataloader(data_train, args.train_subset_size)
 val_loader = create_dataloader(data_val, args.val_subset_size)
 test_loader = create_dataloader(data_test, args.test_subset_size)
@@ -76,17 +79,15 @@ print('test size:', len(test_loader) * args.batch_size)
 print('val size:', len(val_loader) * args.batch_size)
 
 # models
-model = ResNet34StatsPool(IN_PLANES, EMBD_DIM, dropout=0.5).cuda()
-# model = TDNNStatsPool(embedding_size=EMBD_DIM).cuda()
-# model = BLSTMStatsPool(embedding_size=EMBD_DIM).cuda()
-classifier = nn.Linear(EMBD_DIM, NUM_CLASSES).cuda()
+inner_model = ResNet34StatsPool(IN_PLANES, EMBD_DIM, dropout=0.5).cuda()
+# TDNNStatsPool(embedding_size=EMBD_DIM).cuda()
+# BLSTMStatsPool(embedding_size=EMBD_DIM).cuda()
+model = EmbeddingModel(inner_model, EMBD_DIM, NUM_CLASSES, include_dur=True, include_onehot=True).cuda()
 
 # criterion, optimizer, scheduler
 criterion = nn.CrossEntropyLoss().cuda()
 lr = args.lr
-optimizer = torch.optim.SGD(
-    list(model.parameters()) + list(classifier.parameters()), lr=lr, momentum=0.9,
-)
+optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9)
 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=args.lr_patience, factor=0.1)
 
 # load previous model if resume
@@ -95,7 +96,6 @@ if start_epoch != 0:
     print(f'Load exp/{SAVE_DIR}/model_{start_epoch - 1}.pkl')
     checkpoint = torch.load(f'exp/{SAVE_DIR}/model_{start_epoch - 1}.pkl')
     model.load_state_dict(checkpoint['model'])
-    classifier.load_state_dict(checkpoint['classifier'])
     if not args.lr:
         optimizer.load_state_dict(checkpoint['optimizer'])
     scheduler.load_state_dict(checkpoint['scheduler'])
@@ -111,37 +111,40 @@ def train():
     for epoch in range(start_epoch, epochs):
         losses, acc = AverageMeter(), AverageMeter()
         model.train()
-        classifier.train()
 
         # progress bar
         t = trange(len(train_loader))
         t.set_description(f'epoch {epoch}')
 
-        for i, (feats, label) in enumerate(train_loader):
-            # if epoch < args.warm_up_epoch:
-            #     change_lr(
-            #         optimizer,
-            #         warmup_lr(lr, len(train_loader) * epoch + i, len(train_loader), args.warm_up_epoch)
-            #     )
+        for i, packed in enumerate(train_loader):
+            x = packed[0]
+            y = packed[1]
 
-            feats, label = feats.cuda(), label.cuda()
+            durs = None
+            onehots = None
+            if len(packed) >= 3:
+                durs = packed[2]
 
-            outputs = classifier(model(feats))
-            loss = criterion(outputs, label)
+            if len(packed) >= 4:
+                onehots = packed[3]
+
+            x, y = x.cuda(), y.cuda()
+
+            y_pred = model(x, durs, onehots)
+            loss = criterion(y_pred, y)
 
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 
-            losses.update(loss.data.item(), feats.size(0))
-            acc.update(accuracy(outputs.data, label), feats.size(0))
+            losses.update(loss.data.item(), x.size(0))
+            acc.update(accuracy(y_pred.data, y), x.size(0))
 
             # update progress bar
-            t.set_postfix(loss=losses.val, loss_avg=losses.avg, acc=acc.val, acc_avg=acc.avg,
-                          lr=get_lr(optimizer))
+            t.set_postfix(loss=losses.val, loss_avg=losses.avg, acc=acc.val, acc_avg=acc.avg, lr=get_lr(optimizer))
             t.update()
 
-        save_checkpoint(f'exp/{SAVE_DIR}', epoch, model, classifier, optimizer, scheduler)
+        save_checkpoint(f'exp/{SAVE_DIR}', epoch, model, optimizer, scheduler)
         # noinspection PyUnresolvedReferences
         save_ramdom_state(
             f'exp/{SAVE_DIR}', random.getstate(), np.random.get_state(), torch.get_rng_state(),
@@ -159,14 +162,24 @@ def train():
 
 def validate(dataloader: DataLoader) -> float:
     model.eval()
-    classifier.eval()
 
     ys = []
     preds = []
     with torch.no_grad():
-        for j, (x, y) in enumerate(dataloader):
+        for j, packed in enumerate(dataloader):
+            x = packed[0]
+            y = packed[1]
+
+            durs = None
+            onehots = None
+            if len(packed) >= 3:
+                durs = packed[2]
+
+            if len(packed) >= 4:
+                onehots = packed[3]
+
+            y_pred = model(x.cuda(), durs, onehots).cpu()
             y = y.cpu()
-            y_pred = classifier(model(x.cuda())).cpu()
             ys.append(y)
             preds.append(torch.argmax(y_pred, dim=-1))
 

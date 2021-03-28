@@ -48,16 +48,7 @@ def save_ramdom_state(chk_dir, ramdom_state, np_stats, torch_state, torch_cuda_s
                 }, os.path.join(chk_dir, 'random_state.pkl'))
 
 
-def save_checkpoint(chk_dir, epoch, model, classifier, optimizer, scheduler=None, lr=None):
-    torch.save({'model': model.module.state_dict(),
-                'classifier': classifier.state_dict() if classifier else None,
-                'optimizer': optimizer.state_dict(),
-                'scheduler': scheduler.state_dict() if scheduler else None,
-                'lr': lr
-                }, os.path.join(chk_dir, 'model_%d.pkl' % epoch))
-
-
-def save_transformer_checkpoint(chk_dir, epoch, model, optimizer, scheduler):
+def save_checkpoint(chk_dir, epoch, model, optimizer, scheduler):
     torch.save(
         {
             'model': model.module.state_dict(),

@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from train.dataset.dataset import SequentialEmbeddingDataset, collate_sequential_embedding
 from train.utils import (
-    AverageMeter, masked_accuracy, save_transformer_checkpoint, get_lr, create_logger,
+    AverageMeter, masked_accuracy, save_checkpoint, get_lr, create_logger,
     get_padding_mask, load_transformer_data
 )
 import torch
@@ -113,7 +113,7 @@ def main():
             )
             t.update()
 
-        save_transformer_checkpoint(f'exp/{SAVE_DIR}', epoch, model, optimizer, scheduler)
+        save_checkpoint(f'exp/{SAVE_DIR}', epoch, model, optimizer, scheduler)
 
         acc_val = validate()
         logger.info(

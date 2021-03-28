@@ -7,6 +7,11 @@ from train.modules.tdnn import TDNN
 from train.modules.pooling import StatsPool, ScaleDotProductAttention
 from train.dataset.dataset import SpectroFeat
 from torch.nn.utils.rnn import pad_sequence
+from train.config import N_PHONES
+
+__all__ = [
+    'ResNet34SDPAttPool', 'ResNet34StatsPool', 'TDNNStatsPool', 'BLSTMStatsPool', 'EmbeddingModel', 'ContextualModel'
+]
 
 
 class ResNet34StatsPool(nn.Module):
@@ -103,6 +108,53 @@ class BLSTMStatsPool(nn.Module):
         x = self.embedding(x)
         x = F.relu(x)
         return x
+
+
+class EmbeddingModel(nn.Module):
+    def __init__(self, model: nn.Module, embedding_size: int, num_classes: int, hidden_size=128, include_dur=False,
+                 include_onehot=False):
+        super().__init__()
+        self.include_dur = include_dur
+        self.include_onehot = include_onehot
+
+        self.model1 = model
+
+        seg_feat_size = 0
+        if self.include_dur:
+            seg_feat_size += 1
+        if self.include_onehot:
+            seg_feat_size += N_PHONES
+
+        if seg_feat_size > 0:
+            # self.model2 = nn.Linear(3 * seg_feat_size, hidden_size)
+            self.model2 = nn.Linear(seg_feat_size, hidden_size)
+
+        if include_onehot or include_dur:
+            self.classifier = nn.Linear(embedding_size + hidden_size, num_classes).cuda()
+        else:
+            self.classifier = nn.Linear(embedding_size, num_classes).cuda()
+
+    def forward(self, x, durs=None, onehots=None):
+        x = self.model1(x)  # (batch, embedding_size)
+        x = F.relu(x)
+
+        seg_feats = []
+        if self.include_dur:
+            assert durs is not None
+            seg_feats.append(durs)
+        if self.include_onehot:
+            assert onehots is not None
+            seg_feats.append(onehots)
+
+        if len(seg_feats) > 0:
+            x1 = torch.hstack(seg_feats)
+            x1 = torch.flatten(x1, 1)
+            x1 = self.model2(x1)
+            x1 = F.relu(x1)
+            x = torch.hstack([x, x1])
+
+        out = self.classifier(x)
+        return out
 
 
 class ContextualModel(nn.Module):

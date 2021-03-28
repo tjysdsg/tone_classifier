@@ -4,17 +4,29 @@ import os
 import torch
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import Dataset
-from train.config import WAV_DIR, CACHE_DIR, PRETRAINED_EMBEDDINGS_DIR
+from train.config import WAV_DIR, CACHE_DIR, PHONE_TO_ONEHOT
 from typing import List
 
 
-def collate_fn_pad(batch):
-    transposed = list(zip(*batch))
+def collate_spectrogram(batch):
+    transposed: List = list(zip(*batch))
     x = transposed[0]
     y = transposed[1]
+
     y = torch.from_numpy(np.asarray(y, dtype='int64'))
-    x = pad_sequence(x, batch_first=True)
-    return x, y
+    x = pad_sequence(x, batch_first=True)  # (batch, seq_len, mels)
+
+    ret = [x, y]
+    if len(transposed) >= 3:
+        durs = torch.as_tensor(transposed[2], dtype=torch.float32)
+        durs = durs.reshape(durs.shape[0], 1)  # (batch, 1)
+        ret.append(durs)
+
+    if len(transposed) >= 4:
+        onehots = torch.stack(transposed[3])  # (batch, n_phones)
+        ret.append(onehots)
+
+    return ret
 
 
 def pad_seq(labels: List[torch.Tensor], padding_value=0) -> torch.Tensor:
@@ -44,6 +56,17 @@ def get_spk_from_utt(utt: str):
 def get_wav_path(utt: str):
     spk = get_spk_from_utt(utt)
     return os.path.join(WAV_DIR, spk, f'{utt}.wav')
+
+
+class SpectroFeat:
+    def __init__(self, spectro: torch.Tensor, lengths: List[int or float] = None, onehots: torch.Tensor = None):
+        """
+        :param spectro: Spectrograms
+        :param lengths: List of signal lengths
+        """
+        self.spectro = spectro
+        self.lengths = lengths
+        self.onehots = onehots
 
 
 class CachedSpectrogramExtractor:
@@ -136,33 +159,50 @@ class CachedSpectrogramExtractor:
 
 
 class SpectrogramDataset(Dataset):
-    def __init__(self, data: list, snr_range=(20, 50)):
+    def __init__(self, data: list, snr_range=(20, 50), include_dur=False, include_onehot=False):
         """
         :param data: List of (tone, utt, phone, start, dur)
         """
         self.data = data
         self.snr_range = snr_range
         self.extractor = CachedSpectrogramExtractor(os.path.join(CACHE_DIR, 'spectro'))
+        self.include_dur = include_dur
+        self.include_onehot = include_onehot
 
     def __getitem__(self, idx):
         tone, utt, phone, start, dur = self.data[idx]
 
-        y = self.extractor.load(utt, start, dur)
-        y = torch.from_numpy(y.astype('float32'))
-        return y, tone
+        x = self.extractor.load(utt, start, dur)
+        x = torch.from_numpy(x.astype('float32'))
+        ret = [x, tone]
+
+        if self.include_dur:
+            ret.append(x.shape[0])
+
+        if self.include_onehot:
+            pure_phone: str = phone
+            if pure_phone[-1].isnumeric():
+                pure_phone = pure_phone[:-1]
+            onehot = PHONE_TO_ONEHOT[pure_phone]
+            ret.append(torch.from_numpy(onehot).type(torch.float32))
+
+        return ret
 
     def __len__(self):
         return len(self.data)
 
 
-class SpectroFeat:
-    def __init__(self, spectro: torch.Tensor, lengths: List[int] = None):
-        """
-        :param spectro: Spectrogram
-        :param lengths: List of signal lengths
-        """
-        self.spectro = spectro
-        self.lengths = lengths
+class PhoneSegmentDataset(Dataset):
+    def __init__(self, *args, feat_type='spectrogram', **kwargs):
+        self.feat_type = feat_type
+        # if self.feat_type == 'spectrogram':
+        self._dataset = SpectrogramDataset(*args, **kwargs)
+
+    def __getitem__(self, idx):
+        return self._dataset[idx]
+
+    def __len__(self):
+        return len(self._dataset)
 
 
 class SequentialSpectrogramDataset(Dataset):

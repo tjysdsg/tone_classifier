@@ -10,7 +10,7 @@ from train.dataset.dataset import SequentialSpectrogramDataset, collate_sequenti
 from train.modules.transformers import TransEncoder
 from train.modules.models import ContextualModel
 from train.utils import (
-    set_seed, AverageMeter, masked_accuracy, save_transformer_checkpoint, get_lr, create_logger,
+    set_seed, AverageMeter, masked_accuracy, save_checkpoint, get_lr, create_logger,
 )
 import torch
 import torch.nn as nn
@@ -140,7 +140,7 @@ def train():
             )
             t.update()
 
-        save_transformer_checkpoint(f'exp/{SAVE_DIR}', epoch, model, optimizer, scheduler)
+        save_checkpoint(f'exp/{SAVE_DIR}', epoch, model, optimizer, scheduler)
 
         acc_val = validate(val_loader)
         logger.info(
