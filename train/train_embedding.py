@@ -48,28 +48,32 @@ set_seed(args.seed)
 
 logger = create_logger('train_embedding', f'exp/{SAVE_DIR}/{args.action}_{args.start_epoch}.log')
 
+utt2tones: dict = json.load(open('utt2tones.json'))
 
-def create_dataloader(data: list, subset_size: float):
+
+def create_dataloader(utts: list, subset_size: float):
     from sklearn.model_selection import train_test_split
-    _, data = train_test_split(data, test_size=subset_size, random_state=42)
+    _, utts = train_test_split(utts, test_size=subset_size, random_state=42)
+    u2t = {u: utt2tones[u] for u in utts}
 
     # count the number of each tone
     tones = {t: 0 for t in range(NUM_CLASSES)}
-    for d in data:
-        tone = d[0]
-        tones[tone] += 1
+    for _, t in u2t.items():
+        for d in t:
+            tone = d[0]
+            tones[tone] += 1
     print(tones)
 
     return DataLoader(
-        PhoneSegmentDataset(data, feat_type='spectrogram', include_dur=True, include_onehot=True),
+        PhoneSegmentDataset(u2t, feat_type='spectrogram', include_dur=True, include_onehot=False),
         batch_size=args.batch_size, num_workers=args.workers, collate_fn=collate_spectrogram,
     )
 
 
 # data loaders
-data_train: list = json.load(open(f'{DATA_DIR}/train.json'))
-data_test: list = json.load(open(f'{DATA_DIR}/test.json'))
-data_val: list = json.load(open(f'{DATA_DIR}/val.json'))
+data_train: list = json.load(open(f'{DATA_DIR}/train_utts.json'))
+data_test: list = json.load(open(f'{DATA_DIR}/test_utts.json'))
+data_val: list = json.load(open(f'{DATA_DIR}/val_utts.json'))
 train_loader = create_dataloader(data_train, args.train_subset_size)
 val_loader = create_dataloader(data_val, args.val_subset_size)
 test_loader = create_dataloader(data_test, args.test_subset_size)
@@ -82,7 +86,7 @@ print('val size:', len(val_loader) * args.batch_size)
 inner_model = ResNet34StatsPool(IN_PLANES, EMBD_DIM, dropout=0.5).cuda()
 # TDNNStatsPool(embedding_size=EMBD_DIM).cuda()
 # BLSTMStatsPool(embedding_size=EMBD_DIM).cuda()
-model = EmbeddingModel(inner_model, EMBD_DIM, NUM_CLASSES, include_dur=True, include_onehot=True).cuda()
+model = EmbeddingModel(inner_model, EMBD_DIM, NUM_CLASSES, include_dur=True, include_onehot=False).cuda()
 
 # criterion, optimizer, scheduler
 criterion = nn.CrossEntropyLoss().cuda()

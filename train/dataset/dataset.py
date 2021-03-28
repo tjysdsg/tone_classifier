@@ -6,6 +6,7 @@ from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import Dataset
 from train.config import WAV_DIR, CACHE_DIR, PHONE_TO_ONEHOT
 from typing import List
+import random
 
 
 def collate_spectrogram(batch):
@@ -18,11 +19,11 @@ def collate_spectrogram(batch):
 
     ret = [x, y]
     if len(transposed) >= 3:
-        durs = torch.as_tensor(transposed[2], dtype=torch.float32)
-        durs = durs.reshape(durs.shape[0], 1)  # (batch, 1)
+        durs = torch.as_tensor(transposed[2], dtype=torch.float32)  # (batch, 3)
         ret.append(durs)
 
     if len(transposed) >= 4:
+        # TODO: previous onehot, curr onehot, next onehot
         onehots = torch.stack(transposed[3])  # (batch, n_phones)
         ret.append(onehots)
 
@@ -159,27 +160,40 @@ class CachedSpectrogramExtractor:
 
 
 class SpectrogramDataset(Dataset):
-    def __init__(self, data: list, snr_range=(20, 50), include_dur=False, include_onehot=False):
-        """
-        :param data: List of (tone, utt, phone, start, dur)
-        """
-        self.data = data
-        self.snr_range = snr_range
+    def __init__(self, utt2tones: dict, include_dur=False, include_onehot=False):
+        self.utt2tones = utt2tones
+        self.utts = list(utt2tones.keys())
         self.extractor = CachedSpectrogramExtractor(os.path.join(CACHE_DIR, 'spectro'))
         self.include_dur = include_dur
         self.include_onehot = include_onehot
 
+        self.data = []
+        for utt in self.utts:
+            data = self.utt2tones[utt]
+            prev_dur = 0
+            for i, (tone, phone, start, dur) in enumerate(data):
+                if i > 0:
+                    self.data[-1].append(dur)  # set `next_dur` of the previous phone to `dur`
+                self.data.append([
+                    tone, utt, phone, start, dur, prev_dur,  # next_dur,
+                ])
+                prev_dur = dur
+            self.data[-1].append(0)  # set `next_dur` of the last phone in an utterance to 0
+
+        random.shuffle(self.data)
+
     def __getitem__(self, idx):
-        tone, utt, phone, start, dur = self.data[idx]
+        tone, utt, phone, start, dur, prev_dur, next_dur = self.data[idx]
 
         x = self.extractor.load(utt, start, dur)
         x = torch.from_numpy(x.astype('float32'))
         ret = [x, tone]
 
         if self.include_dur:
-            ret.append(x.shape[0])
+            ret.append([prev_dur, dur, next_dur])
 
         if self.include_onehot:
+            # TODO: previous onehot, curr onehot, next onehot
             pure_phone: str = phone
             if pure_phone[-1].isnumeric():
                 pure_phone = pure_phone[:-1]

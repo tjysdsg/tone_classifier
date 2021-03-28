@@ -126,8 +126,7 @@ class EmbeddingModel(nn.Module):
             seg_feat_size += N_PHONES
 
         if seg_feat_size > 0:
-            # self.model2 = nn.Linear(3 * seg_feat_size, hidden_size)
-            self.model2 = nn.Linear(seg_feat_size, hidden_size)
+            self.model2 = nn.Linear(3 * seg_feat_size, hidden_size)
 
         if include_onehot or include_dur:
             self.classifier = nn.Linear(embedding_size + hidden_size, num_classes).cuda()
