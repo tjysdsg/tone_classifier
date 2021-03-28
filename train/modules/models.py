@@ -1,9 +1,11 @@
 import torch
+from typing import List
 import torch.nn as nn
 import torch.nn.functional as F
 from train.modules.front_resnet import ResNet34
 from train.modules.tdnn import TDNN
 from train.modules.pooling import StatsPool, ScaleDotProductAttention
+from train.dataset.dataset import SpectroFeat
 from torch.nn.utils.rnn import pad_sequence
 
 
@@ -104,10 +106,11 @@ class BLSTMStatsPool(nn.Module):
 
 
 class ContextualModel(nn.Module):
-    def __init__(self, embd_model: nn.Module, model: nn.Module):
+    def __init__(self, embd_model: nn.Module, model: nn.Module, include_dur=False):
         super().__init__()
         self.embd_model = embd_model
         self.model = model
+        self.include_dur = include_dur
 
     def forward(self, packed):
         """
@@ -115,15 +118,21 @@ class ContextualModel(nn.Module):
         """
         self.embd_model.eval()
 
-        items = list(zip(*packed))
-        xs = items[0]  # (utts, seq_len', sig_len', mels)
+        items: List = list(zip(*packed))
+        feats: List[SpectroFeat] = items[0]  # (utts, seq_len', sig_len', mels)
         lengths = items[1]
 
         embds = []
-        for x in xs:
+        for feat in feats:
+            x = feat.spectro
             x = x.type(torch.float32).cuda()  # (seq_len, sig_len, mels)
 
             embd = self.embd_model(x)
+
+            if self.include_dur:
+                sig_lens = torch.as_tensor(feat.lengths, dtype=torch.float32)
+                embd = torch.stack([embd, sig_lens])
+
             embds.append(embd)  # embds: (utt, seq_len', embd_size)
 
         feat = pad_sequence(embds, batch_first=True)

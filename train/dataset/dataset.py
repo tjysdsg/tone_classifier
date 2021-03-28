@@ -28,8 +28,8 @@ def pad_seq(labels: List[torch.Tensor], padding_value=0) -> torch.Tensor:
 
 def collate_sequential_spectrogram(batch):
     transposed: list = list(zip(*batch))
-    spectrograms = transposed[0]  # (batch_size, seq_len, ...)
-    x = [[e, e.shape[0]] for e in spectrograms]
+    spectrograms: List[SpectroFeat] = transposed[0]  # (batch_size, seq_len, ...)
+    x = [[e, e.spectro.shape[0]] for e in spectrograms]
 
     y = transposed[1]  # (batch_size, seq_len)
     y = pad_seq(y, padding_value=-100)  # -100 is ignored by NLLLoss
@@ -68,12 +68,6 @@ class CachedSpectrogramExtractor:
                 self.cache[spectro_id] = path
 
         self.cache_list_file = open(self.cache_list_path, 'a', buffering=1)  # line buffered
-
-    # def build_cache_path(self, utt: str, start: float, dur: float):
-    #     spk = get_spk_from_utt(utt)
-    #     spk_dir = os.path.join(self.cache_dir, spk)
-    #     os.makedirs(spk_dir, exist_ok=True)
-    #     return os.path.join(spk_dir, f'{get_spectro_id(utt, start, dur)}.npy')
 
     def build_cache_path(self, utt: str):
         spk = get_spk_from_utt(utt)
@@ -161,11 +155,22 @@ class SpectrogramDataset(Dataset):
         return len(self.data)
 
 
+class SpectroFeat:
+    def __init__(self, spectro: torch.Tensor, lengths: List[int] = None):
+        """
+        :param spectro: Spectrogram
+        :param lengths: List of signal lengths
+        """
+        self.spectro = spectro
+        self.lengths = lengths
+
+
 class SequentialSpectrogramDataset(Dataset):
-    def __init__(self, utt2tones: dict):
+    def __init__(self, utt2tones: dict, include_dur=False):
         self.utts = list(utt2tones.keys())
         self.utt2tones = utt2tones
         self.extractor = CachedSpectrogramExtractor(os.path.join(CACHE_DIR, 'spectro'))
+        self.include_dur = include_dur
 
         self.sequences = []
         for utt in self.utts:
@@ -180,12 +185,22 @@ class SequentialSpectrogramDataset(Dataset):
 
         xs = []
         ys = []
+        lengths = []
         for tone, phone, start, dur in seq:
             x = self.extractor.load(utt, start, dur)
+
+            if self.include_dur:
+                lengths.append(x.shape[0])
+
             x = torch.from_numpy(x.astype('float32'))
             xs.append(x)
             ys.append(tone)
 
         x = pad_sequence(xs, batch_first=True)  # (seq_len, sig_len, mels)
         y = torch.as_tensor(ys, dtype=torch.long)  # (seq_len,)
-        return x, y
+
+        feat = SpectroFeat(x)
+        if self.include_dur:
+            feat.lengths = lengths
+
+        return feat, y

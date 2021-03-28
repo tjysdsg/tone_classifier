@@ -21,6 +21,7 @@ SAVE_DIR = 'transformer'
 MAX_GRAD_NORM = 10
 EMBD_MODEL_EPOCH = 23
 os.makedirs(f'exp/{SAVE_DIR}', exist_ok=True)
+torch.multiprocessing.set_sharing_strategy('file_system')
 
 parser = argparse.ArgumentParser(description='Train embedding on transformer')
 parser.add_argument('action', type=str, default='train', nargs='?')
@@ -60,7 +61,7 @@ def create_dataloader(utts: list, subset_size: float):
 
     return DataLoader(
         SequentialSpectrogramDataset(u2t), batch_size=args.batch_size, num_workers=args.workers,
-        pin_memory=True, collate_fn=collate_sequential_spectrogram,
+        collate_fn=collate_sequential_spectrogram,
     )
 
 
@@ -90,7 +91,7 @@ def load_resnet_embedding_model(model_name: str, epoch: int, in_planes: int, emb
 embd_model = load_resnet_embedding_model('embedding', EMBD_MODEL_EPOCH, IN_PLANES, EMBD_DIM).cuda()
 trans_encoder = TransEncoder(num_classes=NUM_CLASSES, embedding_size=EMBD_DIM).cuda()
 model = ContextualModel(embd_model=embd_model, model=trans_encoder)
-optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.8)
+optimizer = torch.optim.SGD(model.parameters(), lr=0.001, momentum=0.8)
 criterion = nn.CrossEntropyLoss(ignore_index=-100, reduction='sum').cuda()
 scheduler = ReduceLROnPlateau(optimizer, patience=4, verbose=True)
 
