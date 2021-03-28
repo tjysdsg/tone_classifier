@@ -5,7 +5,7 @@ import numpy as np
 from train.utils import (
     set_seed, create_logger, AverageMeter, accuracy, save_checkpoint, save_ramdom_state, get_lr,
 )
-from sklearn.metrics import confusion_matrix, accuracy_score
+from sklearn.metrics import confusion_matrix, accuracy_score, classification_report
 import os
 import random
 import torch
@@ -148,7 +148,7 @@ def train():
             torch.cuda.get_rng_state_all()
         )
 
-        acc_val = validate()
+        acc_val = validate(val_loader)
         logger.info(
             '\nEpoch %d\t  Loss %.4f\t  Accuracy %3.3f\t  lr %f\t  acc_val %3.3f\n'
             % (epoch, losses.avg, acc.avg, get_lr(optimizer), acc_val)
@@ -157,66 +157,37 @@ def train():
         scheduler.step(losses.avg)
 
 
-def validate() -> float:
-    logger.info('============== VALIDATING ==============')
+def validate(dataloader: DataLoader) -> float:
     model.eval()
     classifier.eval()
 
     ys = []
     preds = []
     with torch.no_grad():
-        for j, (x, y) in enumerate(val_loader):
+        for j, (x, y) in enumerate(dataloader):
             y = y.cpu()
             y_pred = classifier(model(x)).cpu()
             ys.append(y)
             preds.append(torch.argmax(y_pred, dim=-1))
 
-    ys = torch.cat(ys)
-    preds = torch.cat(preds)
+    ys = torch.cat(ys).numpy()
+    preds = torch.cat(preds).numpy()
 
-    confusion = confusion_matrix(ys.numpy(), preds.numpy())
-    logger.info('Confusion Matrix:')
-    logger.info(confusion)
+    acc = accuracy_score(ys, preds)
+    logger.info(f'Accuracy: {acc}')
 
-    # confusion = confusion[1:, 1:]
-    # logger.info(f'4 tone accuracy: {np.trace(confusion) / np.sum(confusion)}')
+    confusion = confusion_matrix(ys, preds)
+    logger.info(f'\n{confusion}')
 
-    return accuracy_score(ys.numpy(), preds.numpy())
-
-
-def test():
-    logger.info('============== TESTING ==============')
-    model.eval()
-    classifier.eval()
-
-    ys = []
-    preds = []
-    with torch.no_grad():
-        for j, (x, y) in enumerate(test_loader):
-            y = y.cpu()
-            y_pred = classifier(model(x)).cpu()
-            ys.append(y)
-            preds.append(torch.argmax(y_pred, dim=-1))
-
-    ys = torch.cat(ys)
-    preds = torch.cat(preds)
-
-    logger.info(f'Test acc: {accuracy_score(ys.numpy(), preds.numpy())}')
-
-    print("ys:", ys.numpy())
-
-    confusion = confusion_matrix(ys.numpy(), preds.numpy())
-    logger.info('Confusion Matrix:')
-    logger.info(confusion)
-
-    # confusion = confusion[1:, 1:]
-    # logger.info(f'4 tone accuracy: {np.trace(confusion) / np.sum(confusion)}')
+    report = classification_report(ys, preds)
+    logger.info(f'\n{report}')
+    return acc
 
 
 if __name__ == '__main__':
     if args.action == 'train':
         train()
     elif args.action == 'test':
-        test()
+        validate(test_loader)
     else:
         raise RuntimeError(f"Unknown action: {args.action}")

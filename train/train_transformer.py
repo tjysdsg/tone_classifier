@@ -3,7 +3,7 @@ import numpy as np
 import json
 import argparse
 from tqdm import trange
-from sklearn.metrics import confusion_matrix
+from sklearn.metrics import confusion_matrix, classification_report
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from train.dataset.dataset import SequentialSpectrogramDataset, collate_sequential_spectrogram
@@ -177,13 +177,16 @@ def validate(dataloader: DataLoader) -> float:
                 ys.append(label)
                 preds.append(pred)
 
-    ys = torch.cat(ys)
-    preds = torch.cat(preds)
-    logger.info('Confusion Matrix:')
-    confusion = confusion_matrix(ys.numpy(), preds.numpy())
-    logger.info(f'\n{confusion}')
-    print(acc.avg)
+    ys = torch.cat(ys).numpy()
+    preds = torch.cat(preds).numpy()
 
+    confusion = confusion_matrix(ys, preds)
+    logger.info(f'\n{confusion}')
+
+    report = classification_report(ys, preds)
+    logger.info(f'\n{report}')
+
+    print(acc.avg)
     return acc.avg
 
 
