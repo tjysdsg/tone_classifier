@@ -7,20 +7,25 @@ from train.dataset.dataset import get_spk_from_utt
 SEED = 1024
 random.seed(SEED, version=2)
 
-TRAIN_SIZE = 0.8
-TEST_SIZE = 0.1
-VAL_SIZE = 0.1
-OUT_DIR = 'data/embedding_6t'
+TRAIN_SIZE = 1300
+TEST_SIZE = 300
+VAL_SIZE = 300
+OUT_DIR = 'data'
 os.makedirs(OUT_DIR, exist_ok=True)
 
 
-def split(data: list):
+def split(data: list, absolute=True):
     total = len(data)
     random.shuffle(data)
 
-    train_size = int(total * TRAIN_SIZE)
-    test_size = int(total * TEST_SIZE)
-    val_size = int(total * VAL_SIZE)
+    if absolute:
+        train_size = int(TRAIN_SIZE)
+        test_size = int(TEST_SIZE)
+        val_size = int(VAL_SIZE)
+    else:
+        train_size = int(total * TRAIN_SIZE)
+        test_size = int(total * TEST_SIZE)
+        val_size = int(total * VAL_SIZE)
 
     train = data[:train_size]
     test = data[train_size:train_size + test_size]
@@ -43,29 +48,25 @@ for u in all_utts:
     spk2utts[spk].append(u)
 
 speakers = list(speakers)
-print(f'Number of speakers: {len(speakers)}')
+print(f'Number of speakers: {len(speakers)}')  # 1924
 
-train_utts = []
-test_utts = []
-val_utts = []
-ivector_utts = []
+train_spks, test_spks, val_spks = split(speakers, absolute=True)
 
-for spk, us in spk2utts.items():
-    if len(us) < 100:
-        print(f'Speaker {spk} contains too few utterances {len(us)}')
-        continue
 
-    tr, t, val = split(us)
-    tr, iv = train_test_split(tr, test_size=0.2, random_state=SEED)
-    train_utts += tr
-    test_utts += t
-    val_utts += val
-    ivector_utts += iv
+def get_utts_of_spks(spks: list):
+    ret = []
+    for spk in spks:
+        ret += spk2utts[spk]
+    return ret
+
+
+train_utts = get_utts_of_spks(train_spks)
+test_utts = get_utts_of_spks(test_spks)
+val_utts = get_utts_of_spks(val_spks)
 
 print(f'Train size: {len(train_utts)}')
 print(f'Test size: {len(test_utts)}')
 print(f'Val size: {len(val_utts)}')
-print(f'i-vector size: {len(ivector_utts)}')
 
 with open(f'{OUT_DIR}/train_utts.json', 'w') as f:
     json.dump(train_utts, f)
@@ -73,8 +74,6 @@ with open(f'{OUT_DIR}/test_utts.json', 'w') as f:
     json.dump(test_utts, f)
 with open(f'{OUT_DIR}/val_utts.json', 'w') as f:
     json.dump(val_utts, f)
-with open(f'{OUT_DIR}/ivector_utts.json', 'w') as f:
-    json.dump(ivector_utts, f)
 
 
 def flatten_utt2tones(utts: list):
