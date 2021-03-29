@@ -27,6 +27,37 @@
 
 Epoch 23 Loss 0.4081 Accuracy 0.843 lr 0.010000 acc_val 0.795
 
+# Embedding 2
+
+- Epoch 18
+- Accuracy: 0.8510240440537715
+- ResNet34StatsPool
+- Light tone + initials
+- Segment duration
+- Batch size 64
+- SGD(lr=0.01, momentum=0.9)
+- ReduceLROnPlateau(patience=4, factor=0.1)
+
+>       [32715   121   333   195   239   104]
+>       [  194  6139   396    42   414    65]
+>       [  379   904  5952   368   192   208]
+>       [  288   216   850  2966   802   334]
+>       [  383   994   288   536  8907   287]
+>       [  158    96   215   229   288  1120]
+>
+>             precision    recall  f1-score   support
+>       
+>       0       0.96      0.97      0.96     33707
+>       1       0.72      0.85      0.78      7250
+>       2       0.74      0.74      0.74      8003
+>       3       0.68      0.54      0.61      5456
+>       4       0.82      0.78      0.80     11395
+>       5       0.53      0.53      0.53      2106
+>
+>       accuracy                          0.85     67917
+>       macro avg     0.74      0.74      0.74     67917
+>       weighted avg  0.85      0.85      0.85     67917
+
 # Contextual Model 1
 
 - Transformer Encoder
