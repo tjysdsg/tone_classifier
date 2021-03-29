@@ -19,27 +19,27 @@ torch.multiprocessing.set_sharing_strategy('file_system')
 
 # create output dir
 SAVE_DIR = 'baseline1'
-os.makedirs(f'exp/{SAVE_DIR}', exist_ok=True)
 DATA_DIR = 'data'
-INCLUDE_DUR = False
-INCLUDE_ONEHOT = False
 
 parser = argparse.ArgumentParser(description='Training embedding')
-# dataset
-parser.add_argument('--data_dir', default='feats', type=str)
-parser.add_argument('--data_name', default='train', type=str)
+parser.add_argument('--save_dir', type=str)
+
 parser.add_argument('-j', '--workers', default=8, type=int)
 parser.add_argument('-b', '--batch_size', default=64, type=int)
+
 parser.add_argument('--val_data_name', default='val', type=str)
 parser.add_argument('--test_data_name', default='test', type=str)
-parser.add_argument('--train_subset_size', default=0.2, type=float)
-parser.add_argument('--test_subset_size', default=0.15, type=float)
-parser.add_argument('--val_subset_size', default=0.15, type=float)
-# learning rate scheduler
+parser.add_argument('--train_subset_size', default=0.02, type=float)
+parser.add_argument('--test_subset_size', default=0.02, type=float)
+parser.add_argument('--val_subset_size', default=0.02, type=float)
+
+parser.add_argument('--include_dur', default=False, action='store_true')
+parser.add_argument('--include_onehot', default=False, action='store_true')
+
 parser.add_argument('--lr', default=0.01, type=float)
 parser.add_argument('--warm_up_epoch', default=3, type=int)
 parser.add_argument('--lr_patience', default=2, type=int)
-# others
+
 parser.add_argument('action', type=str, default='train', nargs='?')
 parser.add_argument('--epochs', default=500, type=int)
 parser.add_argument('--start_epoch', default=0, type=int)
@@ -47,6 +47,14 @@ parser.add_argument('--seed', default=3007123, type=int)
 args = parser.parse_args()
 
 set_seed(args.seed)
+SAVE_DIR = args.save_dir
+os.makedirs(f'exp/{SAVE_DIR}', exist_ok=True)
+print(f'Saving logs and output to exp/{SAVE_DIR}')
+
+INCLUDE_DUR = args.include_dur
+INCLUDE_ONEHOT = args.include_onehot
+
+print(f'Using durations: {INCLUDE_DUR}\nUsing onehot encodings: {INCLUDE_ONEHOT}')
 
 logger = create_logger('train_embedding', f'exp/{SAVE_DIR}/{args.action}_{args.start_epoch}.log')
 
