@@ -119,10 +119,6 @@ if start_epoch != 0:
     if not args.lr:
         optimizer.load_state_dict(checkpoint['optimizer'])
     scheduler.load_state_dict(checkpoint['scheduler'])
-    checkpoint = torch.load(f'exp/{SAVE_DIR}/random_state.pkl')
-    random.setstate(checkpoint['random'])
-    np.random.set_state(checkpoint['np'])
-    torch.set_rng_state(checkpoint['torch'])
 
 model = nn.DataParallel(model)
 
