@@ -1,4 +1,4 @@
-# Embedding Model 1
+# Baseline 1
 
 - ResNet34StatsPool
 - No light tone
@@ -27,36 +27,36 @@
 
 Epoch 23 Loss 0.4081 Accuracy 0.843 lr 0.010000 acc_val 0.795
 
-# Embedding 2
+# Baseline 3
 
-- Epoch 18
-- Accuracy: 0.8510240440537715
+- Epoch 14
 - ResNet34StatsPool
-- Light tone + initials
-- Segment duration
+- Neutral tone + initials
+- Segment duration + onehot encoding
 - Batch size 64
 - SGD(lr=0.01, momentum=0.9)
-- ReduceLROnPlateau(patience=4, factor=0.1)
+- ReduceLROnPlateau(patience=2, factor=0.1)
 
->       [32715   121   333   195   239   104]
->       [  194  6139   396    42   414    65]
->       [  379   904  5952   368   192   208]
->       [  288   216   850  2966   802   334]
->       [  383   994   288   536  8907   287]
->       [  158    96   215   229   288  1120]
+>       [21706     0     0     0     0     0]
+>       [    0  4085   282    53   360     7]
+>       [    0   178  4402   227   276    42]
+>       [    0    72   319  2470   596    20]
+>       [    0   225   174   197  6682    17]
+>       [    0    19    59    45    94  1190]
 >
->             precision    recall  f1-score   support
->       
->       0       0.96      0.97      0.96     33707
->       1       0.72      0.85      0.78      7250
->       2       0.74      0.74      0.74      8003
->       3       0.68      0.54      0.61      5456
->       4       0.82      0.78      0.80     11395
->       5       0.53      0.53      0.53      2106
+>                  precision    recall  f1-score   support
+>       0            1.00      1.00      1.00     21706
+>       1            0.89      0.85      0.87      4787
+>       2            0.84      0.86      0.85      5125
+>       3            0.83      0.71      0.76      3477
+>       4            0.83      0.92      0.87      7295
+>       5            0.93      0.85      0.89      1407
 >
->       accuracy                          0.85     67917
->       macro avg     0.74      0.74      0.74     67917
->       weighted avg  0.85      0.85      0.85     67917
+>       accuracy                         0.93     43797
+>       macro avg    0.89      0.86      0.87     43797
+>       weighted avg 0.93      0.93      0.92     43797
+
+Epoch 14 Loss 0.1594 Accuracy 0.945 lr 0.010000 acc_val 0.926
 
 # Contextual Model 1
 
