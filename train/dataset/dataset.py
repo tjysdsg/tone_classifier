@@ -136,7 +136,7 @@ class CachedSpectrogramExtractor:
             try:
                 y = np.load(cache_path, allow_pickle=False)
                 y = self.chop_spectro(y, start, dur)
-            except ValueError:
+            except Exception:
                 print(f'Failed to load cache at {cache_path}')
                 y = self.load_uncached(utt, start, dur)
         else:
