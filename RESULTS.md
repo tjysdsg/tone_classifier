@@ -26,11 +26,39 @@
 >     macro avg    0.73     0.72      0.73     46137
 >     weighted avg 0.84     0.84      0.84     46137
 
+# Baseline 2
+
+- Epoch 14
+- ResNet34StatsPool
+- Segment duration + onehot encoding without context
+- Batch size 64
+- SGD(lr=0.01, momentum=0.9)
+- ReduceLROnPlateau(patience=2, factor=0.1)
+- Accuracy: 0.8913886902052582
+
+>       [22866     0     0     0     0     0]
+>       [    0  3909   463    63   519    15]
+>       [    0   373  4333   443   268    68]
+>       [    0    83   348  2396   772    97]
+>       [    0   322   165   511  6708   114]
+>       [    0    36    85   116   150   914]
+
+>                precision    recall  f1-score   support
+>     0            1.00      1.00      1.00     22866
+>     1            0.83      0.79      0.81      4969
+>     2            0.80      0.79      0.80      5485
+>     3            0.68      0.65      0.66      3696
+>     4            0.80      0.86      0.83      7820
+>     5            0.76      0.70      0.73      1301
+>     accuracy                         0.89     46137
+>     macro avg    0.81      0.80      0.80     46137
+>     weighted avg 0.89      0.89      0.89     46137
+
 # Baseline 3
 
 - Epoch 14
 - ResNet34StatsPool
-- Segment duration + onehot encoding
+- Segment duration + onehot encoding with context
 - Batch size 64
 - SGD(lr=0.01, momentum=0.9)
 - ReduceLROnPlateau(patience=2, factor=0.1)
