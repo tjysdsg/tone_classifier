@@ -171,42 +171,64 @@ class SpectrogramDataset(Dataset):
         self.include_onehot = include_onehot
 
         self.data = []
+        self.durs = []
+        """[(prev_dur, next_dur), ...]"""
+        self.phones = []
+        """[(prev_phone, next_phone), ...]"""
         for utt in self.utts:
             data = self.utt2tones[utt]
-            prev_dur = 0
+            prev_dur = 0  # prev_dur of the first segment in a sentence is 0
+            prev_phone = 'sil'  # prev_phone of the first segment in a sentence is 'sil'
             for i, (tone, phone, start, dur) in enumerate(data):
                 if i > 0:
-                    self.data[-1].append(dur)  # set `next_dur` of the previous phone to `dur`
-                self.data.append([
-                    tone, utt, phone, start, dur, prev_dur,  # next_dur,
+                    # set next_dur of the previous segment to dur
+                    self.durs[-1].append(dur)
+                    # set next_phone of the previous segment to phone
+                    self.phones[-1].append(phone)
+
+                self.data.append([tone, utt, phone, start, dur])
+
+                self.durs.append([
+                    prev_dur,  # next_dur,
+                ])
+                self.phones.append([
+                    prev_phone,  # next_phone,
                 ])
                 prev_dur = dur
-            self.data[-1].append(0)  # set `next_dur` of the last phone in an utterance to 0
+                prev_phone = phone
+            self.durs[-1].append(0)  # set next_dur of the last segment to 0
+            self.phones[-1].append('sil')  # set next_phone of the last segment to 'sil'
 
-        random.shuffle(self.data)
+        assert len(self.data) == len(self.durs) == len(self.phones)
+
+        self.size = len(self.data)
+        self.argshuffle = np.random.permutation(self.size)
 
     def __getitem__(self, idx):
-        tone, utt, phone, start, dur, prev_dur, next_dur = self.data[idx]
+        idx = self.argshuffle[idx]
+        tone, utt, phone, start, dur = self.data[idx]
 
         x = self.extractor.load(utt, start, dur)
         x = torch.from_numpy(x.astype('float32'))
         ret = [x, tone]
 
         if self.include_dur:
+            prev_dur, next_dur = self.durs[idx]
             ret.append([prev_dur, dur, next_dur])
 
         if self.include_onehot:
-            # TODO: previous onehot, curr onehot, next onehot
-            pure_phone: str = phone
-            if pure_phone[-1].isnumeric():
-                pure_phone = pure_phone[:-1]
-            onehot = PHONE_TO_ONEHOT[pure_phone]
-            ret.append(torch.from_numpy(onehot).type(torch.float32))
+            prev_phone, next_phone = self.phones[idx]
+            onehot = [
+                torch.from_numpy(PHONE_TO_ONEHOT[prev_phone]).type(torch.float32),
+                torch.from_numpy(PHONE_TO_ONEHOT[phone]).type(torch.float32),
+                torch.from_numpy(PHONE_TO_ONEHOT[next_phone]).type(torch.float32),
+            ]
+            ret.append(torch.cat(onehot))
 
         return ret
 
     def __len__(self):
-        return len(self.data)
+        return self.size
 
 
 class PhoneSegmentDataset(Dataset):
