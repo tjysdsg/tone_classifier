@@ -116,6 +116,20 @@ class CachedSpectrogramExtractor:
         S = np.moveaxis(S, 0, 1)  # from (mels, time) to (time, mels)
         return S
 
+    def load_uncached(self, utt: str, start: float, dur: float) -> np.ndarray:
+        cache_path = self.build_cache_path(utt)
+        path = get_wav_path(utt)
+
+        y, _ = librosa.load(path, sr=16000)
+        y = self.spectro(y)
+        np.save(cache_path, y, allow_pickle=False)
+
+        y = self.chop_spectro(y, start, dur)
+
+        self.cache[utt] = cache_path
+        self.cache_list_file.write(f'{utt}\t{cache_path}\n')
+        return y
+
     def load(self, utt: str, start: float, dur: float) -> np.ndarray:
         cache_path = self.cache.get(utt)
         if cache_path is not None:
@@ -123,19 +137,11 @@ class CachedSpectrogramExtractor:
                 y = np.load(cache_path, allow_pickle=False)
                 y = self.chop_spectro(y, start, dur)
             except ValueError:
-                raise RuntimeError(f'Failed to load cache at {cache_path}')
+                print(f'Failed to load cache at {cache_path}')
+                y = self.load_uncached(utt, start, dur)
         else:
-            cache_path = self.build_cache_path(utt)
-            path = get_wav_path(utt)
+            y = self.load_uncached(utt, start, dur)
 
-            y, _ = librosa.load(path, sr=16000)
-            y = self.spectro(y)
-            np.save(cache_path, y, allow_pickle=False)
-
-            y = self.chop_spectro(y, start, dur)
-
-            self.cache[utt] = cache_path
-            self.cache_list_file.write(f'{utt}\t{cache_path}\n')
         return y
 
     """
