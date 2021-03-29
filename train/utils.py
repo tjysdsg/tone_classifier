@@ -40,14 +40,6 @@ def get_lr(optimizer):
         return param_group['lr']
 
 
-def save_ramdom_state(chk_dir, ramdom_state, np_stats, torch_state, torch_cuda_state):
-    torch.save({'random': ramdom_state,
-                'np': np_stats,
-                'torch': torch_state,
-                'torch_cuda': torch_cuda_state
-                }, os.path.join(chk_dir, 'random_state.pkl'))
-
-
 def save_checkpoint(chk_dir, epoch, model, optimizer, scheduler):
     torch.save(
         {

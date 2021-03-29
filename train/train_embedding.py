@@ -3,7 +3,7 @@ import json
 from tqdm import trange
 import numpy as np
 from train.utils import (
-    set_seed, create_logger, AverageMeter, accuracy, save_checkpoint, save_ramdom_state, get_lr,
+    set_seed, create_logger, AverageMeter, accuracy, save_checkpoint, get_lr,
 )
 from sklearn.metrics import confusion_matrix, accuracy_score, classification_report
 import os
@@ -17,16 +17,13 @@ from train.config import NUM_CLASSES, EMBD_DIM, IN_PLANES
 
 torch.multiprocessing.set_sharing_strategy('file_system')
 
-# create output dir
-SAVE_DIR = 'baseline1'
-DATA_DIR = 'data'
-
 parser = argparse.ArgumentParser(description='Training embedding')
 parser.add_argument('--save_dir', type=str)
 
 parser.add_argument('-j', '--workers', default=8, type=int)
 parser.add_argument('-b', '--batch_size', default=64, type=int)
 
+parser.add_argument('--data_dir', default='data', type=str)
 parser.add_argument('--val_data_name', default='val', type=str)
 parser.add_argument('--test_data_name', default='test', type=str)
 parser.add_argument('--train_subset_size', default=0.02, type=float)
@@ -45,15 +42,16 @@ parser.add_argument('--epochs', default=500, type=int)
 parser.add_argument('--start_epoch', default=0, type=int)
 parser.add_argument('--seed', default=3007123, type=int)
 args = parser.parse_args()
-
 set_seed(args.seed)
+
+DATA_DIR = args.data_dir
 SAVE_DIR = args.save_dir
+
 os.makedirs(f'exp/{SAVE_DIR}', exist_ok=True)
 print(f'Saving logs and output to exp/{SAVE_DIR}')
 
 INCLUDE_DUR = args.include_dur
 INCLUDE_ONEHOT = args.include_onehot
-
 print(f'Using durations: {INCLUDE_DUR}\nUsing onehot encodings: {INCLUDE_ONEHOT}')
 
 logger = create_logger('train_embedding', f'exp/{SAVE_DIR}/{args.action}_{args.start_epoch}.log')
@@ -96,8 +94,10 @@ print('val size:', len(val_loader) * args.batch_size)
 inner_model = ResNet34StatsPool(IN_PLANES, EMBD_DIM, dropout=0.5).cuda()
 # TDNNStatsPool(embedding_size=EMBD_DIM).cuda()
 # BLSTMStatsPool(embedding_size=EMBD_DIM).cuda()
-model = EmbeddingModel(inner_model, EMBD_DIM, NUM_CLASSES, include_dur=INCLUDE_DUR,
-                       include_onehot=INCLUDE_ONEHOT).cuda()
+model = EmbeddingModel(
+    inner_model, EMBD_DIM, NUM_CLASSES, include_dur=INCLUDE_DUR,
+    include_onehot=INCLUDE_ONEHOT
+).cuda()
 
 # criterion, optimizer, scheduler
 criterion = nn.CrossEntropyLoss().cuda()
@@ -160,11 +160,6 @@ def train():
             t.update()
 
         save_checkpoint(f'exp/{SAVE_DIR}', epoch, model, optimizer, scheduler)
-        # noinspection PyUnresolvedReferences
-        save_ramdom_state(
-            f'exp/{SAVE_DIR}', random.getstate(), np.random.get_state(), torch.get_rng_state(),
-            torch.cuda.get_rng_state_all()
-        )
 
         acc_val = validate(val_loader)
         logger.info(
