@@ -119,8 +119,11 @@ class CachedSpectrogramExtractor:
     def load(self, utt: str, start: float, dur: float) -> np.ndarray:
         cache_path = self.cache.get(utt)
         if cache_path is not None:
-            y = np.load(cache_path, allow_pickle=False)
-            y = self.chop_spectro(y, start, dur)
+            try:
+                y = np.load(cache_path, allow_pickle=False)
+                y = self.chop_spectro(y, start, dur)
+            except ValueError:
+                print(f'Failed to load cache at {cache_path}')
         else:
             cache_path = self.build_cache_path(utt)
             path = get_wav_path(utt)
