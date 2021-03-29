@@ -32,6 +32,7 @@ parser.add_argument('--val_subset_size', default=0.02, type=float)
 
 parser.add_argument('--include_dur', default=False, action='store_true')
 parser.add_argument('--include_onehot', default=False, action='store_true')
+parser.add_argument('--include_context', default=False, action='store_true')
 
 parser.add_argument('--lr', default=0.01, type=float)
 parser.add_argument('--warm_up_epoch', default=3, type=int)
@@ -52,7 +53,8 @@ print(f'Saving logs and output to exp/{SAVE_DIR}')
 
 INCLUDE_DUR = args.include_dur
 INCLUDE_ONEHOT = args.include_onehot
-print(f'Using durations: {INCLUDE_DUR}\nUsing onehot encodings: {INCLUDE_ONEHOT}')
+INCLUDE_CONTEXT = args.include_context
+print(f'Using durations: {INCLUDE_DUR}\nUsing onehot encodings: {INCLUDE_ONEHOT}\nUsing context: {INCLUDE_CONTEXT}')
 
 logger = create_logger('train_embedding', f'exp/{SAVE_DIR}/{args.action}_{args.start_epoch}.log')
 
@@ -73,7 +75,10 @@ def create_dataloader(utts: list, subset_size: float):
     print(tones)
 
     return DataLoader(
-        PhoneSegmentDataset(u2t, feat_type='spectrogram', include_dur=INCLUDE_DUR, include_onehot=INCLUDE_ONEHOT),
+        PhoneSegmentDataset(
+            u2t, feat_type='spectrogram', include_dur=INCLUDE_DUR, include_onehot=INCLUDE_ONEHOT,
+            include_context=INCLUDE_CONTEXT,
+        ),
         batch_size=args.batch_size, num_workers=args.workers, collate_fn=collate_spectrogram,
     )
 
@@ -96,7 +101,7 @@ inner_model = ResNet34StatsPool(IN_PLANES, EMBD_DIM, dropout=0.5).cuda()
 # BLSTMStatsPool(embedding_size=EMBD_DIM).cuda()
 model = EmbeddingModel(
     inner_model, EMBD_DIM, NUM_CLASSES, include_dur=INCLUDE_DUR,
-    include_onehot=INCLUDE_ONEHOT
+    include_onehot=INCLUDE_ONEHOT, include_context=INCLUDE_CONTEXT,
 ).cuda()
 
 # criterion, optimizer, scheduler

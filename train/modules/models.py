@@ -111,11 +111,14 @@ class BLSTMStatsPool(nn.Module):
 
 
 class EmbeddingModel(nn.Module):
-    def __init__(self, model: nn.Module, embedding_size: int, num_classes: int, hidden_size=128, include_dur=False,
-                 include_onehot=False):
+    def __init__(
+            self, model: nn.Module, embedding_size: int, num_classes: int, hidden_size=128, include_dur=False,
+            include_onehot=False, include_context=False
+    ):
         super().__init__()
         self.include_dur = include_dur
         self.include_onehot = include_onehot
+        self.include_context = include_context
 
         self.model1 = model
 
@@ -126,7 +129,9 @@ class EmbeddingModel(nn.Module):
             seg_feat_size += N_PHONES
 
         if seg_feat_size > 0:
-            self.model2 = nn.Linear(3 * seg_feat_size, hidden_size)
+            if self.include_context:
+                seg_feat_size *= 3
+            self.model2 = nn.Linear(seg_feat_size, hidden_size)
 
         if include_onehot or include_dur:
             self.classifier = nn.Linear(embedding_size + hidden_size, num_classes).cuda()

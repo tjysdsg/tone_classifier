@@ -169,12 +169,13 @@ class CachedSpectrogramExtractor:
 
 
 class SpectrogramDataset(Dataset):
-    def __init__(self, utt2tones: dict, include_dur=False, include_onehot=False):
+    def __init__(self, utt2tones: dict, include_dur=False, include_onehot=False, include_context=False):
         self.utt2tones = utt2tones
         self.utts = list(utt2tones.keys())
         self.extractor = CachedSpectrogramExtractor(os.path.join(CACHE_DIR, 'spectro'))
         self.include_dur = include_dur
         self.include_onehot = include_onehot
+        self.include_context = include_context
 
         self.data = []
         self.durs = []
@@ -220,15 +221,23 @@ class SpectrogramDataset(Dataset):
 
         if self.include_dur:
             prev_dur, next_dur = self.durs[idx]
-            ret.append([prev_dur, dur, next_dur])
+            if self.include_context:
+                ret.append([prev_dur, dur, next_dur])
+            else:
+                ret.append([dur, ])
 
         if self.include_onehot:
             prev_phone, next_phone = self.phones[idx]
-            onehot = [
-                torch.from_numpy(PHONE_TO_ONEHOT[prev_phone]).type(torch.float32),
-                torch.from_numpy(PHONE_TO_ONEHOT[phone]).type(torch.float32),
-                torch.from_numpy(PHONE_TO_ONEHOT[next_phone]).type(torch.float32),
-            ]
+            if self.include_context:
+                onehot = [
+                    torch.from_numpy(PHONE_TO_ONEHOT[prev_phone]).type(torch.float32),
+                    torch.from_numpy(PHONE_TO_ONEHOT[phone]).type(torch.float32),
+                    torch.from_numpy(PHONE_TO_ONEHOT[next_phone]).type(torch.float32),
+                ]
+            else:
+                onehot = [
+                    torch.from_numpy(PHONE_TO_ONEHOT[phone]).type(torch.float32),
+                ]
             ret.append(torch.cat(onehot))
 
         return ret
