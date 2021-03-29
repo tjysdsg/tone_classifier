@@ -123,7 +123,7 @@ class CachedSpectrogramExtractor:
                 y = np.load(cache_path, allow_pickle=False)
                 y = self.chop_spectro(y, start, dur)
             except ValueError:
-                print(f'Failed to load cache at {cache_path}')
+                raise RuntimeError(f'Failed to load cache at {cache_path}')
         else:
             cache_path = self.build_cache_path(utt)
             path = get_wav_path(utt)

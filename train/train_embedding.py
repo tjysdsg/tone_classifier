@@ -18,9 +18,11 @@ from train.config import NUM_CLASSES, EMBD_DIM, IN_PLANES
 torch.multiprocessing.set_sharing_strategy('file_system')
 
 # create output dir
-SAVE_DIR = 'embedding_dur_onehot'
+SAVE_DIR = 'baseline1'
 os.makedirs(f'exp/{SAVE_DIR}', exist_ok=True)
-DATA_DIR = 'data_embedding_6t'
+DATA_DIR = 'data'
+INCLUDE_DUR = False
+INCLUDE_ONEHOT = False
 
 parser = argparse.ArgumentParser(description='Training embedding')
 # dataset
@@ -30,13 +32,13 @@ parser.add_argument('-j', '--workers', default=8, type=int)
 parser.add_argument('-b', '--batch_size', default=64, type=int)
 parser.add_argument('--val_data_name', default='val', type=str)
 parser.add_argument('--test_data_name', default='test', type=str)
-parser.add_argument('--train_subset_size', default=0.15, type=float)
+parser.add_argument('--train_subset_size', default=0.2, type=float)
 parser.add_argument('--test_subset_size', default=0.15, type=float)
 parser.add_argument('--val_subset_size', default=0.15, type=float)
 # learning rate scheduler
 parser.add_argument('--lr', default=0.01, type=float)
 parser.add_argument('--warm_up_epoch', default=3, type=int)
-parser.add_argument('--lr_patience', default=4, type=int)
+parser.add_argument('--lr_patience', default=2, type=int)
 # others
 parser.add_argument('action', type=str, default='train', nargs='?')
 parser.add_argument('--epochs', default=500, type=int)
@@ -65,7 +67,7 @@ def create_dataloader(utts: list, subset_size: float):
     print(tones)
 
     return DataLoader(
-        PhoneSegmentDataset(u2t, feat_type='spectrogram', include_dur=True, include_onehot=False),
+        PhoneSegmentDataset(u2t, feat_type='spectrogram', include_dur=INCLUDE_DUR, include_onehot=INCLUDE_ONEHOT),
         batch_size=args.batch_size, num_workers=args.workers, collate_fn=collate_spectrogram,
     )
 
@@ -86,7 +88,8 @@ print('val size:', len(val_loader) * args.batch_size)
 inner_model = ResNet34StatsPool(IN_PLANES, EMBD_DIM, dropout=0.5).cuda()
 # TDNNStatsPool(embedding_size=EMBD_DIM).cuda()
 # BLSTMStatsPool(embedding_size=EMBD_DIM).cuda()
-model = EmbeddingModel(inner_model, EMBD_DIM, NUM_CLASSES, include_dur=True, include_onehot=False).cuda()
+model = EmbeddingModel(inner_model, EMBD_DIM, NUM_CLASSES, include_dur=INCLUDE_DUR,
+                       include_onehot=INCLUDE_ONEHOT).cuda()
 
 # criterion, optimizer, scheduler
 criterion = nn.CrossEntropyLoss().cuda()
