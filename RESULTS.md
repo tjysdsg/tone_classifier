@@ -1,37 +1,36 @@
 # Baseline 1
 
 - ResNet34StatsPool
-- No light tone
-- No initials
-- 60K train samples
-- batch size 64
+- Batch size 64
 - SGD(lr=0.01, momentum=0.9)
-- ReduceLROnPlateau(patience=4, factor=0.1)
+- ReduceLROnPlateau(patience=2, factor=0.1)
+- Accuracy: 0.8406740187684087
 
-|||||
-|---|---|---|---|
-| 2986 |  342 |   37 |  271 |
-|  338 | 3262 |  282 |  138 |
-|   85 |  378 | 1870 |  512 |
-|  379 |  190 |  392 | 4823 |
+>     [20845   123   248   158   254    78]
+>     [  135  3759   423    45   386    39]
+>     [  312   364  3770   367   188   124]
+>     [  210    67   469  1838   723   170]
+>     [  290   437   162   348  5926   132]
+>     [  103    56   112   181   274   681]
 
-| | precision |  recall | f1-score | support |
-|---|---|---|---|---|
-| 0 | 0.79 | 0.82 | 0.80 | 7516  |
-| 1 | 0.78 | 0.80 | 0.79 | 8103  |
-| 2 | 0.71 | 0.66 | 0.69 | 5474  |
-| 3 | 0.85 | 0.84 | 0.84 | 11548 |
-|accuracy | | | 0.80 | 32641 |
-| macro avg | 0.78 | 0.78 | 0.78 | 32641 |
-| weighted avg | 0.79 | 0.80 | 0.79 | 32641 |
+>                precision    recall  f1-score   support
+>     0            0.95      0.96      0.96     21706
+>     1            0.78      0.79      0.78      4787
+>     2            0.73      0.74      0.73      5125
+>     3            0.63      0.53      0.57      3477
+>     4            0.76      0.81      0.79      7295
+>     5            0.56      0.48      0.52      1407
+>
+>     accuracy                      0.84     43797
+>     macro avg    0.73    0.72     0.72     43797
+>     weighted avg 0.84    0.84     0.84     43797
 
-Epoch 23 Loss 0.4081 Accuracy 0.843 lr 0.010000 acc_val 0.795
+Epoch 14 Loss 0.3711 Accuracy 0.868 lr 0.010000 acc_val 0.841
 
 # Baseline 3
 
 - Epoch 14
 - ResNet34StatsPool
-- Neutral tone + initials
 - Segment duration + onehot encoding
 - Batch size 64
 - SGD(lr=0.01, momentum=0.9)
