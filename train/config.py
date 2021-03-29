@@ -60,13 +60,13 @@ PHONE_TO_ID = {
     'v': 50,
     'van': 51,
     've': 52,
-    'ue': 52,  # <---
-    # "vn"
-    'w': 53,
-    'x': 54,
-    'y': 55,
-    'z': 56,
-    'zh': 57
+    # 'ue': 52,
+    "vn": 53,
+    'w': 54,
+    'x': 55,
+    'y': 56,
+    'z': 57,
+    'zh': 58,
 }
 
 N_PHONES = len(list(set(list(PHONE_TO_ID.values()))))
