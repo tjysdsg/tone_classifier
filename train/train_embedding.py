@@ -190,13 +190,17 @@ def validate(dataloader: DataLoader) -> float:
 
             durs = None
             onehots = None
+            spk_embd = None
             if len(packed) >= 3:
                 durs = packed[2]
 
             if len(packed) >= 4:
                 onehots = packed[3]
 
-            y_pred = model(x.cuda(), durs, onehots).cpu()
+            if len(packed) >= 5:
+                spk_embd = packed[4]
+
+            y_pred = model(x.cuda(), durs, onehots, spk_embd).cpu()
             y = y.cpu()
             ys.append(y)
             preds.append(torch.argmax(y_pred, dim=-1))
