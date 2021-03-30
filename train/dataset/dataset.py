@@ -23,10 +23,12 @@ def collate_spectrogram(batch):
         ret.append(durs)
 
     if len(transposed) >= 4:
-        # TODO: previous onehot, curr onehot, next onehot
         onehots = torch.stack(transposed[3])  # (batch, n_phones)
         ret.append(onehots)
 
+    if len(transposed) >= 5:
+        spk_embd = torch.stack(transposed[3])  # (batch, spk_embd_size)
+        ret.append(spk_embd)
     return ret
 
 
@@ -171,9 +173,15 @@ class CachedSpectrogramExtractor:
 class SpeakerEmbeddingDataset(Dataset):
     def __init__(self, utts: list, data_dir=SPEAKER_EMBEDDING_DIR):
         self.utts = utts
+        self.data_dir = data_dir
 
     def __getitem__(self, idx):
-        pass
+        utt = self.utts[idx]
+
+        spk_embd = np.load(os.path.join(self.data_dir, f'{utt}.npy'))
+        spk_embd = torch.from_numpy(spk_embd).type(torch.float32)
+        spk_embd = spk_embd.squeeze()
+        return spk_embd
 
     def __len__(self):
         return len(self.utts)
@@ -280,6 +288,8 @@ class PhoneSegmentDataset(Dataset):
                 ]
             ret.append(torch.cat(onehot))
 
+        if self.include_spk:
+            ret.append(self.spk_dataset[idx])
         return ret
 
     def __len__(self):

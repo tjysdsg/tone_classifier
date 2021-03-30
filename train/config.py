@@ -2,6 +2,7 @@ from train.utils import onehot_encode
 
 NUM_CLASSES = 6
 EMBD_DIM = 128
+SPEAKER_EMBEDDING_SIZE = 128
 IN_PLANES = 16
 WAV_DIR = '/NASdata/AudioData/AISHELL-ASR-SSB/SPEECHDATA/'
 SPEAKER_EMBEDDING_DIR = '/mingback/students/tjy/lanqi/extracted_embeddings/'

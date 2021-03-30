@@ -7,7 +7,7 @@ from train.modules.tdnn import TDNN
 from train.modules.pooling import StatsPool, ScaleDotProductAttention
 from train.dataset.dataset import SpectroFeat
 from torch.nn.utils.rnn import pad_sequence
-from train.config import N_PHONES
+from train.config import N_PHONES, SPEAKER_EMBEDDING_SIZE
 
 __all__ = [
     'ResNet34SDPAttPool', 'ResNet34StatsPool', 'TDNNStatsPool', 'BLSTMStatsPool', 'EmbeddingModel', 'ContextualModel'
@@ -113,17 +113,21 @@ class BLSTMStatsPool(nn.Module):
 class EmbeddingModel(nn.Module):
     def __init__(
             self, model: nn.Module, embedding_size: int, num_classes: int, hidden_size=128, include_segment_feats=False,
-            include_context=False
+            include_context=False, include_spk=False
     ):
         super().__init__()
         self.include_segment_feats = include_segment_feats
         self.include_context = include_context
+        self.include_spk = include_spk
 
         self.model1 = model
 
         seg_feat_size = 0
         if self.include_segment_feats:
             seg_feat_size += 1 + N_PHONES
+
+        if self.include_spk:
+            seg_feat_size += SPEAKER_EMBEDDING_SIZE
 
         if seg_feat_size > 0:
             if self.include_context:
@@ -135,18 +139,22 @@ class EmbeddingModel(nn.Module):
         else:
             self.classifier = nn.Linear(embedding_size, num_classes).cuda()
 
-    def forward(self, x, durs=None, onehots=None):
+    def forward(self, x, durs=None, onehots=None, spk_embd=None):
         x = self.model1(x)  # (batch, embedding_size)
         x = F.relu(x)
 
-        seg_feats = []
+        extra_feats = []
         if self.include_segment_feats:
             assert durs is not None and onehots is not None
-            seg_feats.append(durs)
-            seg_feats.append(onehots)
+            extra_feats.append(durs)
+            extra_feats.append(onehots)
 
-        if len(seg_feats) > 0:
-            x1 = torch.hstack(seg_feats)
+        if self.include_spk:
+            assert spk_embd is not None
+            extra_feats.append(spk_embd)
+
+        if len(extra_feats) > 0:
+            x1 = torch.hstack(extra_feats)
             x1 = torch.flatten(x1, 1)
             x1 = self.model2(x1)
             x1 = F.relu(x1)

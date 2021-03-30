@@ -32,6 +32,7 @@ parser.add_argument('--val_subset_size', default=0.02, type=float)
 
 parser.add_argument('--include_segment_feats', default=False, action='store_true')
 parser.add_argument('--include_context', default=False, action='store_true')
+parser.add_argument('--include_spk', default=False, action='store_true')
 
 parser.add_argument('--lr', default=0.01, type=float)
 parser.add_argument('--warm_up_epoch', default=3, type=int)
@@ -52,7 +53,12 @@ print(f'Saving logs and output to exp/{SAVE_DIR}')
 
 INCLUDE_SEGMENT_FEATS = args.include_segment_feats
 INCLUDE_CONTEXT = args.include_context
-print(f'Using segment features: {INCLUDE_SEGMENT_FEATS}\nUsing context: {INCLUDE_CONTEXT}')
+INCLUDE_SPK = args.include_spk
+print(
+    f'Using segment features: {INCLUDE_SEGMENT_FEATS}'
+    f'\nUsing context: {INCLUDE_CONTEXT}\n'
+    f'Using speaker embedding: {INCLUDE_SPK}'
+)
 
 logger = create_logger('train_embedding', f'exp/{SAVE_DIR}/{args.action}_{args.start_epoch}.log')
 
@@ -75,6 +81,7 @@ def create_dataloader(utts: list, subset_size: float):
     return DataLoader(
         PhoneSegmentDataset(
             u2t, feat_type='spectrogram', include_segment_feats=INCLUDE_SEGMENT_FEATS, include_context=INCLUDE_CONTEXT,
+            include_spk=INCLUDE_SPK,
         ),
         batch_size=args.batch_size, num_workers=args.workers, collate_fn=collate_spectrogram,
     )
@@ -98,6 +105,7 @@ inner_model = ResNet34StatsPool(IN_PLANES, EMBD_DIM, dropout=0.5).cuda()
 # BLSTMStatsPool(embedding_size=EMBD_DIM).cuda()
 model = EmbeddingModel(
     inner_model, EMBD_DIM, NUM_CLASSES, include_segment_feats=INCLUDE_SEGMENT_FEATS, include_context=INCLUDE_CONTEXT,
+    include_spk=INCLUDE_SPK,
 ).cuda()
 
 # criterion, optimizer, scheduler
@@ -134,15 +142,19 @@ def train():
 
             durs = None
             onehots = None
+            spk_embd = None
             if len(packed) >= 3:
                 durs = packed[2]
 
             if len(packed) >= 4:
                 onehots = packed[3]
 
+            if len(packed) >= 5:
+                spk_embd = packed[3]
+
             x, y = x.cuda(), y.cuda()
 
-            y_pred = model(x, durs, onehots)
+            y_pred = model(x, durs, onehots, spk_embd)
             loss = criterion(y_pred, y)
 
             optimizer.zero_grad()
