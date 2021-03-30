@@ -98,7 +98,8 @@ print('test size:', len(test_loader) * args.batch_size)
 print('val size:', len(val_loader) * args.batch_size)
 
 # models
-inner_model = ResNet34AttStatsPool(IN_PLANES, EMBD_DIM, dropout=0.5).cuda()
+inner_model = ResNet34StatsPool(IN_PLANES, EMBD_DIM, dropout=0.5).cuda()
+# inner_model = ResNet34AttStatsPool(IN_PLANES, EMBD_DIM, dropout=0.5).cuda()
 # TDNNStatsPool(embedding_size=EMBD_DIM).cuda()
 # BLSTMStatsPool(embedding_size=EMBD_DIM).cuda()
 model = EmbeddingModel(
@@ -148,7 +149,7 @@ def train():
                 onehots = packed[3]
 
             if len(packed) >= 5:
-                spk_embd = packed[3]
+                spk_embd = packed[4]
 
             x, y = x.cuda(), y.cuda()
 

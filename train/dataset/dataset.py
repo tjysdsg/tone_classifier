@@ -27,7 +27,7 @@ def collate_spectrogram(batch):
         ret.append(onehots)
 
     if len(transposed) >= 5:
-        spk_embd = torch.stack(transposed[3])  # (batch, spk_embd_size)
+        spk_embd = torch.stack(transposed[4])  # (batch, spk_embd_size)
         ret.append(spk_embd)
     return ret
 

@@ -144,13 +144,12 @@ class EmbeddingModel(nn.Module):
         seg_feat_size = 0
         if self.include_segment_feats:
             seg_feat_size += 1 + N_PHONES
-
+        if self.include_context:
+            seg_feat_size *= 3
         if self.include_spk:
             seg_feat_size += SPEAKER_EMBEDDING_SIZE
 
         if seg_feat_size > 0:
-            if self.include_context:
-                seg_feat_size *= 3
             self.model2 = nn.Linear(seg_feat_size, hidden_size)
 
         if include_segment_feats:
