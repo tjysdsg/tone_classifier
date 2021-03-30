@@ -112,28 +112,25 @@ class BLSTMStatsPool(nn.Module):
 
 class EmbeddingModel(nn.Module):
     def __init__(
-            self, model: nn.Module, embedding_size: int, num_classes: int, hidden_size=128, include_dur=False,
-            include_onehot=False, include_context=False
+            self, model: nn.Module, embedding_size: int, num_classes: int, hidden_size=128, include_segment_feats=False,
+            include_context=False
     ):
         super().__init__()
-        self.include_dur = include_dur
-        self.include_onehot = include_onehot
+        self.include_segment_feats = include_segment_feats
         self.include_context = include_context
 
         self.model1 = model
 
         seg_feat_size = 0
-        if self.include_dur:
-            seg_feat_size += 1
-        if self.include_onehot:
-            seg_feat_size += N_PHONES
+        if self.include_segment_feats:
+            seg_feat_size += 1 + N_PHONES
 
         if seg_feat_size > 0:
             if self.include_context:
                 seg_feat_size *= 3
             self.model2 = nn.Linear(seg_feat_size, hidden_size)
 
-        if include_onehot or include_dur:
+        if include_segment_feats:
             self.classifier = nn.Linear(embedding_size + hidden_size, num_classes).cuda()
         else:
             self.classifier = nn.Linear(embedding_size, num_classes).cuda()
@@ -143,11 +140,9 @@ class EmbeddingModel(nn.Module):
         x = F.relu(x)
 
         seg_feats = []
-        if self.include_dur:
-            assert durs is not None
+        if self.include_segment_feats:
+            assert durs is not None and onehots is not None
             seg_feats.append(durs)
-        if self.include_onehot:
-            assert onehots is not None
             seg_feats.append(onehots)
 
         if len(seg_feats) > 0:

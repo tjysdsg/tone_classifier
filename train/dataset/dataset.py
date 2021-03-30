@@ -4,7 +4,7 @@ import os
 import torch
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import Dataset
-from train.config import WAV_DIR, CACHE_DIR, PHONE_TO_ONEHOT
+from train.config import WAV_DIR, CACHE_DIR, PHONE_TO_ONEHOT, SPEAKER_EMBEDDING_DIR
 from typing import List
 import random
 
@@ -168,16 +168,47 @@ class CachedSpectrogramExtractor:
     """
 
 
+class SpeakerEmbeddingDataset(Dataset):
+    def __init__(self, utts: list, data_dir=SPEAKER_EMBEDDING_DIR):
+        self.utts = utts
+
+    def __getitem__(self, idx):
+        pass
+
+    def __len__(self):
+        return len(self.utts)
+
+
 class SpectrogramDataset(Dataset):
-    def __init__(self, utt2tones: dict, include_dur=False, include_onehot=False, include_context=False):
+    def __init__(self, data: list):
+        self.extractor = CachedSpectrogramExtractor(os.path.join(CACHE_DIR, 'spectro'))
+        self.data = data
+
+    def __getitem__(self, idx):
+        tone, utt, _, start, dur = self.data[idx]
+        x = self.extractor.load(utt, start, dur)
+        x = torch.from_numpy(x.astype('float32'))
+        return x, tone
+
+    def __len__(self):
+        return len(self.data)
+
+
+class PhoneSegmentDataset(Dataset):
+    def __init__(
+            self, utt2tones: dict, feat_type='spectrogram', include_segment_feats=False, include_context=False,
+            include_spk=False,
+    ):
         self.utt2tones = utt2tones
         self.utts = list(utt2tones.keys())
-        self.extractor = CachedSpectrogramExtractor(os.path.join(CACHE_DIR, 'spectro'))
-        self.include_dur = include_dur
-        self.include_onehot = include_onehot
+        self.include_segment_feats = include_segment_feats
         self.include_context = include_context
+        self.include_spk = include_spk
 
+        self.flat_utts = []
+        """utts of each phone sample"""
         self.data = []
+        """[[tone, utt, phone, start, dur]]"""
         self.durs = []
         """[(prev_dur, next_dur), ...]"""
         self.phones = []
@@ -187,6 +218,7 @@ class SpectrogramDataset(Dataset):
             prev_dur = 0  # prev_dur of the first segment in a sentence is 0
             prev_phone = 'sil'  # prev_phone of the first segment in a sentence is 'sil'
             for i, (tone, phone, start, dur) in enumerate(data):
+                self.flat_utts.append(utt)
                 if i > 0:
                     # set next_dur of the previous segment to dur
                     self.durs[-1].append(dur)
@@ -206,27 +238,35 @@ class SpectrogramDataset(Dataset):
             self.durs[-1].append(0)  # set next_dur of the last segment to 0
             self.phones[-1].append('sil')  # set next_phone of the last segment to 'sil'
 
-        assert len(self.data) == len(self.durs) == len(self.phones)
+        assert len(self.data) == len(self.durs) == len(self.phones) == len(self.flat_utts)
 
         self.size = len(self.data)
         self.argshuffle = np.random.permutation(self.size)
+
+        # self.feat_type = feat_type # if self.feat_type == 'spectrogram':
+
+        self._dataset = SpectrogramDataset(self.data)
+
+        if include_spk:
+            self.spk_dataset = SpeakerEmbeddingDataset(self.flat_utts)
 
     def __getitem__(self, idx):
         idx = self.argshuffle[idx]
         tone, utt, phone, start, dur = self.data[idx]
 
-        x = self.extractor.load(utt, start, dur)
-        x = torch.from_numpy(x.astype('float32'))
-        ret = [x, tone]
+        spectro, y = self._dataset[idx]
 
-        if self.include_dur:
+        ret = [spectro, y]
+
+        if self.include_segment_feats:
+            # durations
             prev_dur, next_dur = self.durs[idx]
             if self.include_context:
                 ret.append([prev_dur, dur, next_dur])
             else:
                 ret.append([dur, ])
 
-        if self.include_onehot:
+            # onehot encodings
             prev_phone, next_phone = self.phones[idx]
             if self.include_context:
                 onehot = [
@@ -244,19 +284,6 @@ class SpectrogramDataset(Dataset):
 
     def __len__(self):
         return self.size
-
-
-class PhoneSegmentDataset(Dataset):
-    def __init__(self, *args, feat_type='spectrogram', **kwargs):
-        self.feat_type = feat_type
-        # if self.feat_type == 'spectrogram':
-        self._dataset = SpectrogramDataset(*args, **kwargs)
-
-    def __getitem__(self, idx):
-        return self._dataset[idx]
-
-    def __len__(self):
-        return len(self._dataset)
 
 
 class SequentialSpectrogramDataset(Dataset):
