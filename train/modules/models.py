@@ -4,13 +4,14 @@ import torch.nn as nn
 import torch.nn.functional as F
 from train.modules.resnet import ResNet34
 from train.modules.tdnn import TDNN
-from train.modules.pooling import StatsPool, ScaleDotProductAttention
+from train.modules.pooling import StatsPool, ScaleDotProductAttention, AttStatsPool
 from train.dataset.dataset import SpectroFeat
 from torch.nn.utils.rnn import pad_sequence
 from train.config import N_PHONES, SPEAKER_EMBEDDING_SIZE
 
 __all__ = [
-    'ResNet34SDPAttPool', 'ResNet34StatsPool', 'TDNNStatsPool', 'BLSTMStatsPool', 'EmbeddingModel', 'ContextualModel'
+    'ResNet34SDPAttPool', 'ResNet34AttStatsPool', 'ResNet34StatsPool', 'TDNNStatsPool', 'BLSTMStatsPool',
+    'EmbeddingModel', 'ContextualModel'
 ]
 
 
@@ -25,6 +26,24 @@ class ResNet34StatsPool(nn.Module):
 
     def forward(self, x):
         x = self.front(x.unsqueeze(dim=1))
+        x = self.pool(x)
+        x = self.bottleneck(x)
+        if self.drop:
+            x = self.drop(x)
+        return x
+
+
+class ResNet34AttStatsPool(nn.Module):
+    def __init__(self, in_planes, embedding_size, dropout=0.5, **kwargs):
+        super().__init__()
+        self.front = ResNet34(in_planes, **kwargs)
+        self.pool = AttStatsPool(in_planes * 8)
+        self.bottleneck = nn.Linear(in_planes * 8 * 2, embedding_size)
+        self.drop = nn.Dropout(dropout) if dropout else None
+
+    def forward(self, x):
+        x = self.front(x.unsqueeze(dim=1))
+        x = x.mean(dim=3).transpose(1, 2)
         x = self.pool(x)
         x = self.bottleneck(x)
         if self.drop:

@@ -24,6 +24,27 @@ class AvgPool(nn.Module):
         return x.mean(dim=2)
 
 
+class AttStatsPool(nn.Module):
+    def __init__(self, hidden_size: int):
+        super().__init__()
+        self.attention = ScaleDotProductAttention(hidden_size)
+
+    def forward(self, x):
+        """
+        Input size: (batch, time, feat_size)
+        """
+        att_weights = self.attention(x)
+
+        weighted_x = torch.mul(x, att_weights)
+        mean = torch.mean(weighted_x, dim=1)
+
+        weighted_x_sq = torch.mul(x, weighted_x)
+        variance = torch.sum(weighted_x_sq, dim=1) - torch.mul(mean, mean)
+
+        ret = torch.cat((mean, variance), 1)
+        return ret
+
+
 class ScaleDotProductAttention(nn.Module):
 
     def __init__(self, embed_dim):

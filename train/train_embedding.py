@@ -1,13 +1,11 @@
 import argparse
 import json
 from tqdm import trange
-import numpy as np
 from train.utils import (
     set_seed, create_logger, AverageMeter, accuracy, save_checkpoint, get_lr,
 )
 from sklearn.metrics import confusion_matrix, accuracy_score, classification_report
 import os
-import random
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -100,7 +98,7 @@ print('test size:', len(test_loader) * args.batch_size)
 print('val size:', len(val_loader) * args.batch_size)
 
 # models
-inner_model = ResNet34StatsPool(IN_PLANES, EMBD_DIM, dropout=0.5).cuda()
+inner_model = ResNet34AttStatsPool(IN_PLANES, EMBD_DIM, dropout=0.5).cuda()
 # TDNNStatsPool(embedding_size=EMBD_DIM).cuda()
 # BLSTMStatsPool(embedding_size=EMBD_DIM).cuda()
 model = EmbeddingModel(
@@ -211,7 +209,7 @@ def validate(dataloader: DataLoader) -> float:
     confusion = confusion_matrix(ys, preds)
     logger.info(f'\n{confusion}')
 
-    report = classification_report(ys, preds)
+    report = classification_report(ys, preds, digits=4)
     logger.info(f'\n{report}')
     return acc
 
