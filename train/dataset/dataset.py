@@ -4,7 +4,7 @@ import os
 import torch
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import Dataset
-from train.config import WAV_DIR, CACHE_DIR, PHONE_TO_ONEHOT, SPEAKER_EMBEDDING_DIR
+from train.config import WAV_DIR, CACHE_DIR, PHONE_TO_ONEHOT, SPEAKER_EMBEDDING_DIR, NUM_CLASSES
 from typing import List
 import random
 
@@ -214,6 +214,11 @@ class PhoneSegmentDataset(Dataset):
         self.include_spk = include_spk
         self.long_context = long_context
 
+        self._init_data()
+
+    def _init_data(self):
+        self.tone2idx = {t: [] for t in range(NUM_CLASSES)}
+
         self.flat_utts = []
         """utts of each phone sample"""
         self.data = []
@@ -229,7 +234,10 @@ class PhoneSegmentDataset(Dataset):
             pprev_dur = 0
             pprev_phone = 'sil'
             for i, (tone, phone, start, dur) in enumerate(data):
+                self.tone2idx[tone].append(len(self.data))
+
                 self.flat_utts.append(utt)
+
                 if i > 0:
                     # set next_dur of the previous segment to dur
                     self.durs[-1].append(dur)
@@ -253,6 +261,7 @@ class PhoneSegmentDataset(Dataset):
                 pprev_phone = prev_phone
                 prev_dur = dur
                 prev_phone = phone
+
             self.durs[-1].append(0)  # set next_dur of the last segment to 0
             self.phones[-1].append('sil')  # set next_phone of the last segment to 'sil'
 
@@ -264,18 +273,26 @@ class PhoneSegmentDataset(Dataset):
 
         assert len(self.data) == len(self.durs) == len(self.phones) == len(self.flat_utts)
 
-        self.size = len(self.data)
-        self.argshuffle = np.random.permutation(self.size)
-
-        # self.feat_type = feat_type # if self.feat_type == 'spectrogram':
-
         self._dataset = SpectrogramDataset(self.data)
-
-        if include_spk:
+        if self.include_spk:
             self.spk_dataset = SpeakerEmbeddingDataset(self.flat_utts)
 
+        """Balancing data (mostly removing initials)"""
+        size = len(self.data)
+        for t, indices in self.tone2idx.items():
+            size = min(size, len(indices))
+
+        print(f'Balanced data size: {NUM_CLASSES} * {size}')
+
+        self.indices = []
+        for t in self.tone2idx.keys():
+            np.random.shuffle(self.tone2idx[t])
+            self.indices += self.tone2idx[t][:size]
+        np.random.shuffle(self.indices)
+        self.size = len(self.indices)
+
     def __getitem__(self, idx):
-        idx = self.argshuffle[idx]
+        idx = self.indices[idx]
         tone, utt, phone, start, dur = self.data[idx]
 
         spectro, y = self._dataset[idx]

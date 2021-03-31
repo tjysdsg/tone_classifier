@@ -7,6 +7,7 @@ IN_PLANES = 16
 WAV_DIR = '/NASdata/AudioData/AISHELL-ASR-SSB/SPEECHDATA/'
 SPEAKER_EMBEDDING_DIR = '/mingback/students/tjy/lanqi/extracted_embeddings/'
 CACHE_DIR = 'exp/cache/'
+MAX_GRAD_NORM = 1
 
 PHONE_TO_ID = {
     'sil': 0,

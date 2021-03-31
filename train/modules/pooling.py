@@ -25,9 +25,9 @@ class AvgPool(nn.Module):
 
 
 class AttStatsPool(nn.Module):
-    def __init__(self, hidden_size: int):
+    def __init__(self, input_size: int, hidden_size: int):
         super().__init__()
-        self.attention = ScaleDotProductAttention(hidden_size)
+        self.attention = ClassicAttention(input_size, hidden_size)
 
     def forward(self, x):
         """
@@ -45,16 +45,17 @@ class AttStatsPool(nn.Module):
         return ret
 
 
-class ScaleDotProductAttention(nn.Module):
-
-    def __init__(self, embed_dim):
-        super(ScaleDotProductAttention, self).__init__()
-        self.scaling = float(embed_dim) ** -0.5
-        self.q_proj = nn.Linear(embed_dim, embed_dim)
-        self.k_proj = nn.Linear(embed_dim, embed_dim)
+class ClassicAttention(nn.Module):
+    def __init__(self, input_dim: int, embed_dim: int, attn_dropout=0.0):
+        super().__init__()
+        self.embed_dim = embed_dim
+        self.attn_dropout = attn_dropout
+        self.lin_proj = nn.Linear(input_dim, embed_dim)
+        self.v = torch.nn.Parameter(torch.randn(embed_dim))
 
     def forward(self, x):
-        q = self.q_proj(x) * self.scaling
-        k = self.k_proj(x)
-        attn_output_weights = F.softmax(torch.bmm(q, k.transpose(1, 2)), dim=-1)
-        return torch.bmm(attn_output_weights, x)
+        lin_out = self.lin_proj(x)
+        v_view = self.v.unsqueeze(0).expand(lin_out.size(0), len(self.v)).unsqueeze(2)
+        attention_weights = F.tanh(lin_out.bmm(v_view).squeeze())
+        attention_weights_normalized = F.softmax(attention_weights, 1)
+        return attention_weights_normalized

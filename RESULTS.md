@@ -8,7 +8,7 @@
 - Accuracy: 8448533714805904
 
 >     Confusion Matrix
-> 
+>
 >     [21968   123   267   174   265    69]
 >     [  127  3907   447    48   412    28]
 >     [  342   374  4071   350   212   136]
@@ -58,7 +58,7 @@
 >     macro avg    0.81      0.80      0.80     46137
 >     weighted avg 0.89      0.89      0.89     46137
 
-# Baseline 3
+# Short Context
 
 - Epoch 14
 - ResNet34StatsPool
@@ -88,35 +88,3 @@
 >     accuracy                       0.93     46137
 >     macro avg    0.89    0.87      0.88     46137
 >     weighted avg 0.93    0.93      0.93     46137
-
-# Contextual Model 1
-
-- Transformer Encoder
-- Light tone + initials
-- No duration, no one-hot encoding
-- 15k train utterances
-- batch size 64
-- SGD(lr=0.01, momentum=0.9)
-- ReduceLROnPlateau(patience=4, factor=0.1)
-- Epoch 246
-
-|||||||
-|---|---|---|---|---|---|
-| 33124 |  109 |  178 |  132 |  156 |   8 |
-|   136 | 5986 |  483 |   82 |  550 |  13 |
-|   305 |  631 | 6160 |  560 |  272 |  75 |
-|   166 |   95 |  623 | 3736 |  764 |  72 |
-|   310 |  710 |  259 |  660 | 9388 |  68 |
-|    54 |  129 |  385 |  695 |  502 | 341 |
-
-| | precision |  recall | f1-score | support |
-|---|---|---|---|---|
-| 0 | 0.97 | 0.98 | 0.98 | 33707 |
-| 1 | 0.78 | 0.83 | 0.80 |  7250 |
-| 2 | 0.76 | 0.77 | 0.77 |  8003 |
-| 3 | 0.64 | 0.68 | 0.66 |  5456 |
-| 4 | 0.81 | 0.82 | 0.82 | 11395 |
-| 5 | 0.59 | 0.16 | 0.25 |  2106 |
-|accuracy     |      |      | 0.86 | 67917 |
-|macro avg    | 0.76 | 0.71 | 0.71 | 67917 |
-|weighted avg | 0.86 | 0.86 | 0.86 | 67917 |

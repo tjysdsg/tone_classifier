@@ -11,7 +11,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from train.modules.models import *
 from train.dataset.dataset import collate_spectrogram, PhoneSegmentDataset
-from train.config import NUM_CLASSES, EMBD_DIM, IN_PLANES
+from train.config import NUM_CLASSES, EMBD_DIM, IN_PLANES, MAX_GRAD_NORM
 
 torch.multiprocessing.set_sharing_strategy('file_system')
 
@@ -24,18 +24,18 @@ parser.add_argument('-b', '--batch_size', default=64, type=int)
 parser.add_argument('--data_dir', default='data', type=str)
 parser.add_argument('--val_data_name', default='val', type=str)
 parser.add_argument('--test_data_name', default='test', type=str)
-parser.add_argument('--train_subset_size', default=0.02, type=float)
-parser.add_argument('--test_subset_size', default=0.02, type=float)
-parser.add_argument('--val_subset_size', default=0.02, type=float)
+parser.add_argument('--train_subset_size', default=0.1, type=float)
+parser.add_argument('--test_subset_size', default=0.1, type=float)
+parser.add_argument('--val_subset_size', default=0.1, type=float)
 
 parser.add_argument('--include_segment_feats', default=False, action='store_true')
 parser.add_argument('--include_context', default=False, action='store_true')
 parser.add_argument('--include_spk', default=False, action='store_true')
 parser.add_argument('--long_context', default=False, action='store_true')
 
-parser.add_argument('--lr', default=0.01, type=float)
+parser.add_argument('--lr', default=0.001, type=float)
 parser.add_argument('--warm_up_epoch', default=3, type=int)
-parser.add_argument('--lr_patience', default=2, type=int)
+parser.add_argument('--lr_patience', default=1, type=int)
 
 parser.add_argument('action', type=str, default='train', nargs='?')
 parser.add_argument('--epochs', default=500, type=int)
@@ -161,6 +161,10 @@ def train():
 
             optimizer.zero_grad()
             loss.backward()
+
+            _ = nn.utils.clip_grad_norm_(model.parameters(), MAX_GRAD_NORM)
+            _ = nn.utils.clip_grad_norm_(model.parameters(), MAX_GRAD_NORM)
+
             optimizer.step()
 
             losses.update(loss.data.item(), x.size(0))
