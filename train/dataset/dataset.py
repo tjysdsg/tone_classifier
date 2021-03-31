@@ -204,8 +204,8 @@ class SpectrogramDataset(Dataset):
 
 class PhoneSegmentDataset(Dataset):
     def __init__(
-            self, utt2tones: dict, feat_type='spectrogram', include_segment_feats=False, include_context=False,
-            include_spk=False, long_context=False,
+            self, utt2tones: dict, include_segment_feats=False, include_context=False, include_spk=False,
+            long_context=False,
     ):
         self.utt2tones = utt2tones
         self.utts = list(utt2tones.keys())
@@ -217,7 +217,7 @@ class PhoneSegmentDataset(Dataset):
         self._init_data()
 
     def _init_data(self):
-        self.tone2idx = {t: [] for t in range(NUM_CLASSES)}
+        tone2idx = {t: [] for t in range(NUM_CLASSES)}
 
         self.flat_utts = []
         """utts of each phone sample"""
@@ -227,6 +227,8 @@ class PhoneSegmentDataset(Dataset):
         """[(prev_dur, next_dur), ...]"""
         self.phones = []
         """[(prev_phone, next_phone), ...]"""
+
+        idx = 0
         for utt in self.utts:
             data = self.utt2tones[utt]
             prev_dur = 0  # prev_dur of the first segment in a sentence is 0
@@ -234,7 +236,7 @@ class PhoneSegmentDataset(Dataset):
             pprev_dur = 0
             pprev_phone = 'sil'
             for i, (tone, phone, start, dur) in enumerate(data):
-                self.tone2idx[tone].append(len(self.data))
+                tone2idx[tone].append(idx)
 
                 self.flat_utts.append(utt)
 
@@ -262,6 +264,8 @@ class PhoneSegmentDataset(Dataset):
                 prev_dur = dur
                 prev_phone = phone
 
+                idx += 1
+
             self.durs[-1].append(0)  # set next_dur of the last segment to 0
             self.phones[-1].append('sil')  # set next_phone of the last segment to 'sil'
 
@@ -279,15 +283,16 @@ class PhoneSegmentDataset(Dataset):
 
         """Balancing data (mostly removing initials)"""
         size = len(self.data)
-        for t, indices in self.tone2idx.items():
-            size = min(size, len(indices))
+        for t, indices in tone2idx.items():
+            if t != 5:  # neutral tone simply contains too little data
+                size = min(size, len(indices))
 
         print(f'Balanced data size: {NUM_CLASSES} * {size}')
 
         self.indices = []
-        for t in self.tone2idx.keys():
-            np.random.shuffle(self.tone2idx[t])
-            self.indices += self.tone2idx[t][:size]
+        for t in tone2idx.keys():
+            np.random.shuffle(tone2idx[t])
+            self.indices += tone2idx[t][:size]
         np.random.shuffle(self.indices)
         self.size = len(self.indices)
 

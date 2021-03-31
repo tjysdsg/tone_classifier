@@ -24,9 +24,11 @@ parser.add_argument('-b', '--batch_size', default=64, type=int)
 parser.add_argument('--data_dir', default='data', type=str)
 parser.add_argument('--val_data_name', default='val', type=str)
 parser.add_argument('--test_data_name', default='test', type=str)
-parser.add_argument('--train_subset_size', default=0.1, type=float)
-parser.add_argument('--test_subset_size', default=0.1, type=float)
-parser.add_argument('--val_subset_size', default=0.1, type=float)
+parser.add_argument('--train_subset_size', default=0.05, type=float)
+parser.add_argument('--test_subset_size', default=0.05, type=float)
+parser.add_argument('--val_subset_size', default=0.05, type=float)
+
+parser.add_argument('--use_attention', default=False, action='store_true')
 
 parser.add_argument('--include_segment_feats', default=False, action='store_true')
 parser.add_argument('--include_context', default=False, action='store_true')
@@ -81,7 +83,7 @@ def create_dataloader(utts: list, subset_size: float):
 
     return DataLoader(
         PhoneSegmentDataset(
-            u2t, feat_type='spectrogram', include_segment_feats=INCLUDE_SEGMENT_FEATS, include_context=INCLUDE_CONTEXT,
+            u2t, include_segment_feats=INCLUDE_SEGMENT_FEATS, include_context=INCLUDE_CONTEXT,
             include_spk=INCLUDE_SPK, long_context=LONG_CONTEXT,
         ),
         batch_size=args.batch_size, num_workers=args.workers, collate_fn=collate_spectrogram,
@@ -101,10 +103,11 @@ print('test size:', len(test_loader) * args.batch_size)
 print('val size:', len(val_loader) * args.batch_size)
 
 # models
-inner_model = ResNet34StatsPool(IN_PLANES, EMBD_DIM, dropout=0.5).cuda()
-# inner_model = ResNet34AttStatsPool(IN_PLANES, EMBD_DIM, dropout=0.5).cuda()
-# TDNNStatsPool(embedding_size=EMBD_DIM).cuda()
-# BLSTMStatsPool(embedding_size=EMBD_DIM).cuda()
+if args.use_attention:
+    inner_model = ResNet34AttStatsPool(IN_PLANES, EMBD_DIM, dropout=0.5).cuda()
+else:
+    inner_model = ResNet34StatsPool(IN_PLANES, EMBD_DIM, dropout=0.5).cuda()
+
 model = EmbeddingModel(
     inner_model, EMBD_DIM, NUM_CLASSES, include_segment_feats=INCLUDE_SEGMENT_FEATS, include_context=INCLUDE_CONTEXT,
     include_spk=INCLUDE_SPK, long_context=LONG_CONTEXT,
@@ -162,8 +165,9 @@ def train():
             optimizer.zero_grad()
             loss.backward()
 
-            _ = nn.utils.clip_grad_norm_(model.parameters(), MAX_GRAD_NORM)
-            _ = nn.utils.clip_grad_norm_(model.parameters(), MAX_GRAD_NORM)
+            if args.use_attention:
+                _ = nn.utils.clip_grad_norm_(model.parameters(), MAX_GRAD_NORM)
+                _ = nn.utils.clip_grad_norm_(model.parameters(), MAX_GRAD_NORM)
 
             optimizer.step()
 
