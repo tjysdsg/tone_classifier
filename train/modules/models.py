@@ -150,20 +150,24 @@ class EmbeddingModel(nn.Module):
                 seg_feat_size *= 5
             else:
                 seg_feat_size *= 3
-        if self.include_spk:
-            seg_feat_size += SPEAKER_EMBEDDING_SIZE
 
         if seg_feat_size > 0:
             self.model2 = nn.Linear(seg_feat_size, hidden_size)
 
+        if self.include_spk:
+            self.model3 = nn.Linear(SPEAKER_EMBEDDING_SIZE, hidden_size)
+
+        final_size = embedding_size
         if include_segment_feats:
-            self.classifier = nn.Linear(embedding_size + hidden_size, num_classes).cuda()
-        else:
-            self.classifier = nn.Linear(embedding_size, num_classes).cuda()
+            final_size += hidden_size
+        if include_spk:
+            final_size += hidden_size
+        self.classifier = nn.Linear(final_size, num_classes).cuda()
 
     def forward(self, x, durs=None, onehots=None, spk_embd=None):
         x = self.model1(x)  # (batch, embedding_size)
         x = F.relu(x)
+        xs = [x]
 
         extra_feats = []
         if self.include_segment_feats:
@@ -171,17 +175,20 @@ class EmbeddingModel(nn.Module):
             extra_feats.append(durs)
             extra_feats.append(onehots)
 
-        if self.include_spk:
-            assert spk_embd is not None
-            extra_feats.append(spk_embd)
-
         if len(extra_feats) > 0:
             x1 = torch.hstack(extra_feats)
             x1 = torch.flatten(x1, 1)
             x1 = self.model2(x1)
             x1 = F.relu(x1)
-            x = torch.hstack([x, x1])
+            xs.append(x1)
 
+        if self.include_spk:
+            assert spk_embd is not None
+            x1 = self.model3(spk_embd)
+            x1 = F.relu(x1)
+            xs.append(x1)
+
+        x = torch.hstack(xs)
         out = self.classifier(x)
         return out
 
