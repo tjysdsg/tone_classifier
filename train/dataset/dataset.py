@@ -205,13 +205,14 @@ class SpectrogramDataset(Dataset):
 class PhoneSegmentDataset(Dataset):
     def __init__(
             self, utt2tones: dict, feat_type='spectrogram', include_segment_feats=False, include_context=False,
-            include_spk=False,
+            include_spk=False, long_context=False,
     ):
         self.utt2tones = utt2tones
         self.utts = list(utt2tones.keys())
         self.include_segment_feats = include_segment_feats
         self.include_context = include_context
         self.include_spk = include_spk
+        self.long_context = long_context
 
         self.flat_utts = []
         """utts of each phone sample"""
@@ -225,6 +226,8 @@ class PhoneSegmentDataset(Dataset):
             data = self.utt2tones[utt]
             prev_dur = 0  # prev_dur of the first segment in a sentence is 0
             prev_phone = 'sil'  # prev_phone of the first segment in a sentence is 'sil'
+            pprev_dur = 0
+            pprev_phone = 'sil'
             for i, (tone, phone, start, dur) in enumerate(data):
                 self.flat_utts.append(utt)
                 if i > 0:
@@ -233,18 +236,31 @@ class PhoneSegmentDataset(Dataset):
                     # set next_phone of the previous segment to phone
                     self.phones[-1].append(phone)
 
+                if self.long_context and i > 1:
+                    self.durs[-2].append(dur)
+                    self.phones[-2].append(phone)
+
                 self.data.append([tone, utt, phone, start, dur])
 
-                self.durs.append([
-                    prev_dur,  # next_dur,
-                ])
-                self.phones.append([
-                    prev_phone,  # next_phone,
-                ])
+                if self.long_context:
+                    self.durs.append([pprev_dur, prev_dur, dur])
+                    self.phones.append([pprev_phone, prev_phone, phone])
+                else:
+                    self.durs.append([prev_dur, dur])
+                    self.phones.append([prev_phone, phone])
+
+                pprev_dur = prev_dur
+                pprev_phone = prev_phone
                 prev_dur = dur
                 prev_phone = phone
             self.durs[-1].append(0)  # set next_dur of the last segment to 0
             self.phones[-1].append('sil')  # set next_phone of the last segment to 'sil'
+
+            if self.long_context:
+                self.durs[-1].append(0)
+                self.phones[-1].append('sil')
+                self.durs[-2].append(0)
+                self.phones[-2].append('sil')
 
         assert len(self.data) == len(self.durs) == len(self.phones) == len(self.flat_utts)
 
@@ -268,24 +284,19 @@ class PhoneSegmentDataset(Dataset):
 
         if self.include_segment_feats:
             # durations
-            prev_dur, next_dur = self.durs[idx]
             if self.include_context:
-                ret.append([prev_dur, dur, next_dur])
+                ret.append(self.durs[idx])
             else:
                 ret.append([dur, ])
 
             # onehot encodings
-            prev_phone, next_phone = self.phones[idx]
             if self.include_context:
                 onehot = [
-                    torch.from_numpy(PHONE_TO_ONEHOT[prev_phone]).type(torch.float32),
-                    torch.from_numpy(PHONE_TO_ONEHOT[phone]).type(torch.float32),
-                    torch.from_numpy(PHONE_TO_ONEHOT[next_phone]).type(torch.float32),
+                    torch.from_numpy(PHONE_TO_ONEHOT[ph]).type(torch.float32)
+                    for ph in self.phones[idx]
                 ]
             else:
-                onehot = [
-                    torch.from_numpy(PHONE_TO_ONEHOT[phone]).type(torch.float32),
-                ]
+                onehot = [torch.from_numpy(PHONE_TO_ONEHOT[phone]).type(torch.float32)]
             ret.append(torch.cat(onehot))
 
         if self.include_spk:

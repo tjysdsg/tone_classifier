@@ -54,8 +54,6 @@ class ScaleDotProductAttention(nn.Module):
         self.k_proj = nn.Linear(embed_dim, embed_dim)
 
     def forward(self, x):
-        if not self.training:
-            return x.mean(dim=1)
         q = self.q_proj(x) * self.scaling
         k = self.k_proj(x)
         attn_output_weights = F.softmax(torch.bmm(q, k.transpose(1, 2)), dim=-1)
