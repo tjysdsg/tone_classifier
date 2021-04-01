@@ -1,4 +1,6 @@
 import argparse
+import numpy as np
+from typing import Tuple
 import json
 from tqdm import trange
 from train.utils import (
@@ -129,7 +131,26 @@ if start_epoch != 0:
         optimizer.load_state_dict(checkpoint['optimizer'])
     scheduler.load_state_dict(checkpoint['scheduler'])
 
-model = nn.DataParallel(model)
+
+def step(batch: Tuple) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    x = batch[0]
+    y = batch[1]
+
+    durs = None
+    onehots = None
+    spk_embd = None
+    if len(batch) >= 3:
+        durs = batch[2]
+
+    if len(batch) >= 4:
+        onehots = batch[3]
+
+    if len(batch) >= 5:
+        spk_embd = batch[4]
+
+    x, y = x.cuda(), y.cuda()
+    y_pred = model(x, durs, onehots, spk_embd)
+    return x, y, y_pred
 
 
 def train():
@@ -141,25 +162,8 @@ def train():
         t = trange(len(train_loader))
         t.set_description(f'epoch {epoch}')
 
-        for i, packed in enumerate(train_loader):
-            x = packed[0]
-            y = packed[1]
-
-            durs = None
-            onehots = None
-            spk_embd = None
-            if len(packed) >= 3:
-                durs = packed[2]
-
-            if len(packed) >= 4:
-                onehots = packed[3]
-
-            if len(packed) >= 5:
-                spk_embd = packed[4]
-
-            x, y = x.cuda(), y.cuda()
-
-            y_pred = model(x, durs, onehots, spk_embd)
+        for i, batch in enumerate(train_loader):
+            x, y, y_pred = step(batch)
             loss = criterion(y_pred, y)
 
             optimizer.zero_grad()
@@ -189,35 +193,26 @@ def train():
         scheduler.step(losses.avg)
 
 
-def validate(dataloader: DataLoader) -> float:
+def infer(dataloader: DataLoader) -> Tuple[np.ndarray, np.ndarray]:
     model.eval()
 
     ys = []
     preds = []
     with torch.no_grad():
-        for j, packed in enumerate(dataloader):
-            x = packed[0]
-            y = packed[1]
-
-            durs = None
-            onehots = None
-            spk_embd = None
-            if len(packed) >= 3:
-                durs = packed[2]
-
-            if len(packed) >= 4:
-                onehots = packed[3]
-
-            if len(packed) >= 5:
-                spk_embd = packed[4]
-
-            y_pred = model(x.cuda(), durs, onehots, spk_embd).cpu()
+        for j, batch in enumerate(dataloader):
+            _, y, y_pred = step(batch)
             y = y.cpu()
+            y_pred = y_pred.cpu()
             ys.append(y)
             preds.append(torch.argmax(y_pred, dim=-1))
 
     ys = torch.cat(ys).numpy()
     preds = torch.cat(preds).numpy()
+    return ys, preds
+
+
+def validate(dataloader: DataLoader) -> float:
+    ys, preds = infer(dataloader)
 
     acc = accuracy_score(ys, preds)
     logger.info(f'Accuracy: {acc}')
@@ -230,10 +225,36 @@ def validate(dataloader: DataLoader) -> float:
     return acc
 
 
+def tsne(dataloader: DataLoader):
+    # register hook to get embeddings from model
+    embeddings = []
+
+    def hook(_, __, output):
+        embeddings.append(output.cpu().numpy())
+
+    model.model1.register_forward_hook(hook)
+
+    from sklearn.manifold import TSNE
+    from matplotlib import pyplot as plt
+    import seaborn as sns
+
+    labels, _ = infer(dataloader)
+    embeddings = np.vstack(embeddings)
+    tsne = TSNE(n_components=2, perplexity=50, n_jobs=10).fit_transform(embeddings)
+    x = tsne[:, 0]
+    y = tsne[:, 1]
+    sns.scatterplot(x=x, y=y, hue=labels)
+    plt.savefig(f'exp/{SAVE_DIR}/tsne.png')
+
+
 if __name__ == '__main__':
     if args.action == 'train':
+        model = nn.DataParallel(model)
         train()
     elif args.action == 'test':
+        model = nn.DataParallel(model)
         validate(test_loader)
+    elif args.action == 'tsne':
+        tsne(test_loader)
     else:
         raise RuntimeError(f"Unknown action: {args.action}")

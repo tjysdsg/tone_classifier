@@ -159,13 +159,13 @@ class EmbeddingModel(nn.Module):
         if len(extra_feats) > 0:
             x1 = torch.hstack(extra_feats)
             x1 = torch.flatten(x1, 1)
-            x1 = self.model2(x1)
+            x1 = self.model2(x1.cuda())
             x1 = F.relu(x1)
             xs.append(x1)
 
         if self.include_spk:
             assert spk_embd is not None
-            x1 = self.model3(spk_embd)
+            x1 = self.model3(spk_embd.cuda())
             x1 = F.relu(x1)
             xs.append(x1)
 
