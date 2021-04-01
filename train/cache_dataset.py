@@ -15,8 +15,8 @@ data_train: list = json.load(open(f'{DATA_DIR}/train_utts.json'))
 data_test: list = json.load(open(f'{DATA_DIR}/test_utts.json'))
 utts = data_train + data_test
 
-cache = Manager().dict()
-extractor = CachedSpectrogramExtractor(cache=cache)
+# TODO: pass in shared dictionary to extractor slows down the program
+extractor = CachedSpectrogramExtractor()
 
 
 def main():

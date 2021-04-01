@@ -22,18 +22,8 @@ to split train, test, and validation dataset for embedding model training
 python train/train_embedding.py
 ```
 
-to train embedding model, the results are in `exp/embedding*/`
+to train embedding model, the results are in `exp/`
 
 Mel-spectrogram cache is generated at `exp/cache/spectro/wav.scp` and `exp/cache/spectro/*.npy`
-
-- Run `train/embedding/extract_embedding.py` to generate embeddings of utterances according to `utt2tones.json`. Results
-  are in `embeddings/`
-- Run
-
-```bash
-python train/train_transformer.py
-```
-
-to train the transformer model, the results are in `exp/transformer*/`
 
 TODO: explain training script arguments
