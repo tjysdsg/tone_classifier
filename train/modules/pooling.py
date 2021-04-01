@@ -25,37 +25,39 @@ class AvgPool(nn.Module):
 
 
 class AttStatsPool(nn.Module):
-    def __init__(self, input_size: int, hidden_size: int):
+    def __init__(self, hidden_size=128):
         super().__init__()
-        self.attention = ClassicAttention(input_size, hidden_size)
+        self.attention = ScaledDotProductAttention(hidden_size)
 
     def forward(self, x):
         """
         Input size: (batch, time, feat_size)
         """
-        att_weights = self.attention(x)
+        weighted = self.attention(x)
 
-        weighted_x = torch.mul(x, att_weights)
-        mean = torch.mean(weighted_x, dim=1)
+        mean = torch.mean(weighted, dim=1)
+        weighted_sq = torch.mul(x, weighted)
+        variance = torch.sum(weighted_sq, dim=1) - torch.mul(mean, mean)
 
-        weighted_x_sq = torch.mul(x, weighted_x)
-        variance = torch.sum(weighted_x_sq, dim=1) - torch.mul(mean, mean)
-
-        ret = torch.cat((mean, variance), 1)
+        ret = torch.cat((mean, variance), dim=1)
         return ret
 
 
-class ClassicAttention(nn.Module):
-    def __init__(self, input_dim: int, embed_dim: int, attn_dropout=0.0):
+class ScaledDotProductAttention(nn.Module):
+    def __init__(self, input_size: int):
         super().__init__()
-        self.embed_dim = embed_dim
-        self.attn_dropout = attn_dropout
-        self.lin_proj = nn.Linear(input_dim, embed_dim)
-        self.v = torch.nn.Parameter(torch.randn(embed_dim))
+        self.scaling = float(input_size) ** -0.5
+        self.q = nn.Linear(input_size, input_size)
+        self.k = nn.Linear(input_size, input_size)
+        self.v = nn.Linear(input_size, input_size)
 
     def forward(self, x):
-        lin_out = self.lin_proj(x)
-        v_view = self.v.unsqueeze(0).expand(lin_out.size(0), len(self.v)).unsqueeze(2)
-        attention_weights = F.tanh(lin_out.bmm(v_view).squeeze())
-        attention_weights_normalized = F.softmax(attention_weights, 1)
-        return attention_weights_normalized
+        """
+        Input shape: (B, T, D)
+        Output shape: (B, T, D)
+        """
+        q = self.q(x) * self.scaling  # (B, T, D)
+        k = self.k(x)  # (B, T, D)
+        v = self.v(x)  # (B, T, D)
+        attn_weights = F.softmax(torch.bmm(q, k.transpose(1, 2)), dim=-1)  # (B, T, T)
+        return torch.bmm(attn_weights, v)  # (B, T, D)
