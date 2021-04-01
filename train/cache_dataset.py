@@ -1,39 +1,43 @@
 import argparse
+from typing import List
 import json
 from tqdm import trange
-from train.utils import set_seed
-import torch
-from train.dataset.dataset import create_dataloader
-
-torch.multiprocessing.set_sharing_strategy('file_system')
+from train.dataset.dataset import CachedSpectrogramExtractor
+from multiprocessing import Process
 
 parser = argparse.ArgumentParser(description='Make cache of training data')
-parser.add_argument('-j', '--workers', default=8, type=int)
-parser.add_argument('-b', '--batch_size', default=64, type=int)
+parser.add_argument('-j', '--workers', default=20, type=int)
 parser.add_argument('--data_dir', default='data', type=str)
-parser.add_argument('--subset_size', default=0.05, type=float)
-parser.add_argument('--seed', default=3007123, type=int)
 args = parser.parse_args()
-set_seed(args.seed)
 DATA_DIR = args.data_dir
-
-utt2tones: dict = json.load(open('utt2tones.json'))
 
 # data loaders
 data_train: list = json.load(open(f'{DATA_DIR}/train_utts.json'))
 data_test: list = json.load(open(f'{DATA_DIR}/test_utts.json'))
 data_val: list = json.load(open(f'{DATA_DIR}/val_utts.json'))
-all_data = data_train + data_test + data_val
-loader = create_dataloader(
-    all_data, utt2tones, args.subset_size, batch_size=args.batch_size, n_workers=args.workers
-)
+utts = data_train + data_test + data_val
+
+extractor = CachedSpectrogramExtractor()
 
 
 def main():
-    # progress bar
-    t = trange(len(loader))
+    n_jobs = args.workers
+    N = len(utts)
+    n_batches = N // n_jobs + 1
 
-    for _, _ in enumerate(loader):
+    t = trange(n_batches)
+    for b in range(n_batches):
+        offset = b * n_jobs
+        ps = [
+            Process(target=extractor.load_utt, args=(utts[offset + i],))
+            for i in range(n_jobs)
+            if offset + i < N
+        ]
+        for p in ps:
+            p.start()
+        for p in ps:
+            p.join()
+
         t.update()
 
 

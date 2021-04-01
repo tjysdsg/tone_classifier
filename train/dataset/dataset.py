@@ -73,7 +73,10 @@ class SpectroFeat:
 
 
 class CachedSpectrogramExtractor:
-    def __init__(self, cache_dir: str, sr=16000, fmin=50, fmax=350, hop_length=16, n_fft=2048):
+    def __init__(
+            self, cache_dir=os.path.join(CACHE_DIR, 'spectro'), sr=16000, fmin=50, fmax=350, hop_length=16,
+            n_fft=2048
+    ):
         self.sr = sr
         self.fmin = fmin
         self.fmax = fmax
@@ -90,8 +93,8 @@ class CachedSpectrogramExtractor:
         self.cache = {}
         with open(self.cache_list_path) as f:
             for line in f:
-                spectro_id, path = line.replace('\n', '').split()
-                self.cache[spectro_id] = path
+                utt, path = line.replace('\n', '').split()
+                self.cache[utt] = path
 
         self.cache_list_file = open(self.cache_list_path, 'a', buffering=1)  # line buffered
 
@@ -118,7 +121,7 @@ class CachedSpectrogramExtractor:
         S = np.moveaxis(S, 0, 1)  # from (mels, time) to (time, mels)
         return S
 
-    def load_uncached(self, utt: str, start: float, dur: float) -> np.ndarray:
+    def load_uncached(self, utt: str) -> np.ndarray:
         cache_path = self.build_cache_path(utt)
         path = get_wav_path(utt)
 
@@ -126,24 +129,26 @@ class CachedSpectrogramExtractor:
         y = self.spectro(y)
         np.save(cache_path, y, allow_pickle=False)
 
-        y = self.chop_spectro(y, start, dur)
-
         self.cache[utt] = cache_path
         self.cache_list_file.write(f'{utt}\t{cache_path}\n')
         return y
 
-    def load(self, utt: str, start: float, dur: float) -> np.ndarray:
+    def load_utt(self, utt: str) -> np.ndarray:
         cache_path = self.cache.get(utt)
         if cache_path is not None:
             try:
                 y = np.load(cache_path, allow_pickle=False)
-                y = self.chop_spectro(y, start, dur)
             except Exception:
                 print(f'Failed to load cache at {cache_path}')
-                y = self.load_uncached(utt, start, dur)
+                y = self.load_uncached(utt)
         else:
-            y = self.load_uncached(utt, start, dur)
+            y = self.load_uncached(utt)
 
+        return y
+
+    def load(self, utt: str, start: float, dur: float) -> np.ndarray:
+        y = self.load_utt(utt)
+        y = self.chop_spectro(y, start, dur)
         return y
 
     """
