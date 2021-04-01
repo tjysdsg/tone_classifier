@@ -227,7 +227,7 @@ def validate(dataloader: DataLoader) -> float:
     return acc
 
 
-def tsne(dataloader: DataLoader):
+def infer_embeddings(dataloader: DataLoader) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     # register hook to get embeddings from model
     embeddings = []
 
@@ -235,18 +235,37 @@ def tsne(dataloader: DataLoader):
         embeddings.append(output.cpu().numpy())
 
     model.model1.register_forward_hook(hook)
+    labels, y_pred = infer(dataloader)
+    embeddings = np.vstack(embeddings)
+    return labels, y_pred, embeddings
 
+
+def tsne(dataloader: DataLoader):
     from sklearn.manifold import TSNE
     from matplotlib import pyplot as plt
     import seaborn as sns
 
-    labels, _ = infer(dataloader)
+    labels, _, embeddings = infer_embeddings(dataloader)
     embeddings = np.vstack(embeddings)
     tsne = TSNE(n_components=2, perplexity=50, n_jobs=10).fit_transform(embeddings)
     x = tsne[:, 0]
     y = tsne[:, 1]
     sns.scatterplot(x=x, y=y, hue=labels)
     plt.savefig(f'exp/{SAVE_DIR}/tsne.png')
+
+
+def pca(dataloader: DataLoader):
+    from sklearn.decomposition import PCA
+    from matplotlib import pyplot as plt
+    import seaborn as sns
+
+    labels, _, embeddings = infer_embeddings(dataloader)
+    embeddings = np.vstack(embeddings)
+    tsne = PCA(n_components=2).fit_transform(embeddings)
+    x = tsne[:, 0]
+    y = tsne[:, 1]
+    sns.scatterplot(x=x, y=y, hue=labels)
+    plt.savefig(f'exp/{SAVE_DIR}/pca.png')
 
 
 if __name__ == '__main__':
@@ -258,5 +277,7 @@ if __name__ == '__main__':
         validate(test_loader)
     elif args.action == 'tsne':
         tsne(test_loader)
+    elif args.action == 'pca':
+        pca(test_loader)
     else:
         raise RuntimeError(f"Unknown action: {args.action}")
