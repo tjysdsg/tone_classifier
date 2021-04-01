@@ -3,7 +3,7 @@ import librosa
 import os
 import torch
 from torch.nn.utils.rnn import pad_sequence
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, DataLoader
 from train.config import WAV_DIR, CACHE_DIR, PHONE_TO_ONEHOT, SPEAKER_EMBEDDING_DIR, NUM_CLASSES
 from typing import List
 import random
@@ -368,3 +368,28 @@ class SequentialSpectrogramDataset(Dataset):
             feat.lengths = lengths
 
         return feat, y
+
+
+def create_dataloader(
+        utts: list, utt2tones: dict, subset_size: float, include_segment_feats=False, include_context=False,
+        include_spk=False, long_context=False, batch_size=64, n_workers=10,
+):
+    from sklearn.model_selection import train_test_split
+    _, utts = train_test_split(utts, test_size=subset_size, random_state=42)
+    u2t = {u: utt2tones[u] for u in utts}
+
+    # count the number of each tone
+    tones = {t: 0 for t in range(NUM_CLASSES)}
+    for _, t in u2t.items():
+        for d in t:
+            tone = d[0]
+            tones[tone] += 1
+    print(tones)
+
+    return DataLoader(
+        PhoneSegmentDataset(
+            u2t, include_segment_feats=include_segment_feats, include_context=include_context,
+            include_spk=include_spk, long_context=long_context,
+        ),
+        batch_size=batch_size, num_workers=n_workers, collate_fn=collate_spectrogram,
+    )
