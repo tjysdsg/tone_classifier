@@ -13,7 +13,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from train.modules.models import *
-from train.dataset.dataset import collate_spectrogram, PhoneSegmentDataset
+from train.dataset.dataset import create_dataloader
 from train.config import NUM_CLASSES, EMBD_DIM, IN_PLANES, MAX_GRAD_NORM
 
 torch.multiprocessing.set_sharing_strategy('file_system')
@@ -27,9 +27,6 @@ parser.add_argument('-b', '--batch_size', default=64, type=int)
 parser.add_argument('--data_dir', default='data', type=str)
 parser.add_argument('--val_data_name', default='val', type=str)
 parser.add_argument('--test_data_name', default='test', type=str)
-parser.add_argument('--train_subset_size', default=0.05, type=float)
-parser.add_argument('--test_subset_size', default=0.05, type=float)
-parser.add_argument('--val_subset_size', default=0.05, type=float)
 
 parser.add_argument('--use_attention', default=False, action='store_true')
 
@@ -71,40 +68,20 @@ logger.info(" ".join(sys.argv))  # save entire command for reproduction
 
 utt2tones: dict = json.load(open('utt2tones.json'))
 
-
-def create_dataloader(utts: list, subset_size: float):
-    from sklearn.model_selection import train_test_split
-    _, utts = train_test_split(utts, test_size=subset_size, random_state=42)
-    u2t = {u: utt2tones[u] for u in utts}
-
-    # count the number of each tone
-    tones = {t: 0 for t in range(NUM_CLASSES)}
-    for _, t in u2t.items():
-        for d in t:
-            tone = d[0]
-            tones[tone] += 1
-    print(tones)
-
-    return DataLoader(
-        PhoneSegmentDataset(
-            u2t, include_segment_feats=INCLUDE_SEGMENT_FEATS, include_context=INCLUDE_CONTEXT,
-            include_spk=INCLUDE_SPK, long_context=LONG_CONTEXT,
-        ),
-        batch_size=args.batch_size, num_workers=args.workers, collate_fn=collate_spectrogram,
-    )
-
-
 # data loaders
 data_train: list = json.load(open(f'{DATA_DIR}/train_utts.json'))
 data_test: list = json.load(open(f'{DATA_DIR}/test_utts.json'))
-data_val: list = json.load(open(f'{DATA_DIR}/val_utts.json'))
-train_loader = create_dataloader(data_train, args.train_subset_size)
-val_loader = create_dataloader(data_val, args.val_subset_size)
-test_loader = create_dataloader(data_test, args.test_subset_size)
+train_loader = create_dataloader(
+    data_train, utt2tones, include_context=INCLUDE_CONTEXT, include_spk=INCLUDE_SPK,
+    long_context=LONG_CONTEXT, batch_size=args.batch_size, n_workers=args.workers
+)
+test_loader = create_dataloader(
+    data_test, utt2tones, include_context=INCLUDE_CONTEXT, include_spk=INCLUDE_SPK,
+    long_context=LONG_CONTEXT, batch_size=args.batch_size, n_workers=args.workers
+)
 
 print('train size:', len(train_loader) * args.batch_size)
 print('test size:', len(test_loader) * args.batch_size)
-print('val size:', len(val_loader) * args.batch_size)
 
 # models
 if args.use_attention:
@@ -186,7 +163,7 @@ def train():
 
         save_checkpoint(f'exp/{SAVE_DIR}', epoch, model, optimizer, scheduler)
 
-        acc_val = validate(val_loader)
+        acc_val = validate(test_loader)
         logger.info(
             '\nEpoch %d\t  Loss %.4f\t  Accuracy %3.3f\t  lr %f\t  acc_val %3.3f\n'
             % (epoch, losses.avg, acc.avg, get_lr(optimizer), acc_val)

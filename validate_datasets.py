@@ -8,7 +8,7 @@ DATA_DIR = 'data'
 
 
 def main():
-    subsets = ['train', 'test', 'val']
+    subsets = ['train', 'test']
     sets = {s: [] for s in subsets}
     for x in subsets:
         file = os.path.join(DATA_DIR, f'{x}_utts.json')

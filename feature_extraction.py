@@ -10,7 +10,7 @@ FRAME_SUBSAMPLING_FACTOR = 3
 def main():
     utt2trans = {}
     """utt to its canonical phone transcripts"""
-    with open('aishell-asr-ssb-annotations.txt') as f:
+    with open('aishell3.txt') as f:
         for line in f:
             tokens = line.replace('\n', '').split()
             utt = tokens[0].split('.')[0]

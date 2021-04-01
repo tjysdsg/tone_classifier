@@ -1,5 +1,4 @@
 import argparse
-from typing import List
 import json
 from tqdm import trange
 from train.dataset.dataset import CachedSpectrogramExtractor
@@ -14,8 +13,7 @@ DATA_DIR = args.data_dir
 # data loaders
 data_train: list = json.load(open(f'{DATA_DIR}/train_utts.json'))
 data_test: list = json.load(open(f'{DATA_DIR}/test_utts.json'))
-data_val: list = json.load(open(f'{DATA_DIR}/val_utts.json'))
-utts = data_train + data_test + data_val
+utts = data_train + data_test
 
 cache = Manager().dict()
 extractor = CachedSpectrogramExtractor(cache=cache)

@@ -6,7 +6,6 @@ from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import Dataset, DataLoader
 from train.config import WAV_DIR, CACHE_DIR, PHONE_TO_ONEHOT, SPEAKER_EMBEDDING_DIR, NUM_CLASSES
 from typing import List
-from multiprocessing import Manager
 
 
 def collate_spectrogram(batch):
@@ -384,11 +383,9 @@ class SequentialSpectrogramDataset(Dataset):
 
 
 def create_dataloader(
-        utts: list, utt2tones: dict, subset_size: float, include_segment_feats=False, include_context=False,
+        utts: list, utt2tones: dict, include_segment_feats=False, include_context=False,
         include_spk=False, long_context=False, batch_size=64, n_workers=10,
 ):
-    from sklearn.model_selection import train_test_split
-    _, utts = train_test_split(utts, test_size=subset_size, random_state=42)
     u2t = {u: utt2tones[u] for u in utts}
 
     # count the number of each tone
