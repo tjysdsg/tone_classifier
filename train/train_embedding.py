@@ -1,4 +1,5 @@
 import argparse
+import sys
 import numpy as np
 from typing import Tuple
 import json
@@ -66,6 +67,7 @@ print(
 )
 
 logger = create_logger('train_embedding', f'exp/{SAVE_DIR}/{args.action}_{args.start_epoch}.log')
+logger.info(" ".join(sys.argv))  # save entire command for reproduction
 
 utt2tones: dict = json.load(open('utt2tones.json'))
 
