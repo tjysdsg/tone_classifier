@@ -3,7 +3,7 @@ from typing import List
 import json
 from tqdm import trange
 from train.dataset.dataset import CachedSpectrogramExtractor
-from multiprocessing import Process
+from multiprocessing import Process, Manager
 
 parser = argparse.ArgumentParser(description='Make cache of training data')
 parser.add_argument('-j', '--workers', default=20, type=int)
@@ -17,7 +17,8 @@ data_test: list = json.load(open(f'{DATA_DIR}/test_utts.json'))
 data_val: list = json.load(open(f'{DATA_DIR}/val_utts.json'))
 utts = data_train + data_test + data_val
 
-extractor = CachedSpectrogramExtractor()
+cache = Manager().dict()
+extractor = CachedSpectrogramExtractor(cache=cache)
 
 
 def main():

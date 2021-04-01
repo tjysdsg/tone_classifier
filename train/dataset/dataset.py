@@ -6,7 +6,7 @@ from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import Dataset, DataLoader
 from train.config import WAV_DIR, CACHE_DIR, PHONE_TO_ONEHOT, SPEAKER_EMBEDDING_DIR, NUM_CLASSES
 from typing import List
-import random
+from multiprocessing import Manager
 
 
 def collate_spectrogram(batch):
@@ -75,8 +75,17 @@ class SpectroFeat:
 class CachedSpectrogramExtractor:
     def __init__(
             self, cache_dir=os.path.join(CACHE_DIR, 'spectro'), sr=16000, fmin=50, fmax=350, hop_length=16,
-            n_fft=2048
+            n_fft=2048, cache=None,
     ):
+        """
+        :param cache: Pass in custom dictionary to shared memory across processes
+
+        NOTE: builtin cache is not shared across threads nor processes
+        """
+        self.cache = cache
+        if self.cache is None:
+            self.cache = {}
+
         self.sr = sr
         self.fmin = fmin
         self.fmax = fmax
@@ -90,7 +99,6 @@ class CachedSpectrogramExtractor:
         f = open(self.cache_list_path, 'a')  # `touch wav.scp`
         f.close()
 
-        self.cache = {}
         with open(self.cache_list_path) as f:
             for line in f:
                 utt, path = line.replace('\n', '').split()
