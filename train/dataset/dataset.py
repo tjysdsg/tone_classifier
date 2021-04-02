@@ -18,8 +18,12 @@ def collate_spectrogram(batch):
 
     ret = [x, y]
     if len(transposed) >= 3:
-        durs = torch.as_tensor(transposed[2], dtype=torch.float32)  # (batch, 3)
-        ret.append(durs)
+        try:
+            durs = torch.as_tensor(transposed[2], dtype=torch.float32)  # (batch, 3)
+            ret.append(durs)
+        except Exception:
+            print([t for t in transposed[2] if len(t) != 5])
+            raise RuntimeError("FUCK")
 
     if len(transposed) >= 4:
         onehots = torch.stack(transposed[3])  # (batch, n_phones)
@@ -249,15 +253,12 @@ class PhoneSegmentDataset(Dataset):
             pprev_phone = 'sil'
             for i, (tone, phone, start, dur) in enumerate(data):
                 tone2idx[tone].append(idx)
-
                 self.flat_utts.append(utt)
 
+                # set the succeeding segment info of previous sample
                 if i > 0:
-                    # set next_dur of the previous segment to dur
                     self.durs[-1].append(dur)
-                    # set next_phone of the previous segment to phone
                     self.phones[-1].append(phone)
-
                 if self.long_context and i > 1:
                     self.durs[-2].append(dur)
                     self.phones[-2].append(phone)
@@ -278,9 +279,9 @@ class PhoneSegmentDataset(Dataset):
 
                 idx += 1
 
-            self.durs[-1].append(0)  # set next_dur of the last segment to 0
-            self.phones[-1].append('sil')  # set next_phone of the last segment to 'sil'
-
+            # set the succeeding segment info of previous sample
+            self.durs[-1].append(0)
+            self.phones[-1].append('sil')
             if self.long_context:
                 self.durs[-1].append(0)
                 self.phones[-1].append('sil')

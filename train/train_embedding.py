@@ -72,12 +72,12 @@ utt2tones: dict = json.load(open('utt2tones.json'))
 data_train: list = json.load(open(f'{DATA_DIR}/train_utts.json'))
 data_test: list = json.load(open(f'{DATA_DIR}/test_utts.json'))
 train_loader = create_dataloader(
-    data_train, utt2tones, include_context=INCLUDE_CONTEXT, include_spk=INCLUDE_SPK,
-    long_context=LONG_CONTEXT, batch_size=args.batch_size, n_workers=args.workers
+    data_train, utt2tones, include_segment_feats=INCLUDE_SEGMENT_FEATS, include_context=INCLUDE_CONTEXT,
+    include_spk=INCLUDE_SPK, long_context=LONG_CONTEXT, batch_size=args.batch_size, n_workers=args.workers
 )
 test_loader = create_dataloader(
-    data_test, utt2tones, include_context=INCLUDE_CONTEXT, include_spk=INCLUDE_SPK,
-    long_context=LONG_CONTEXT, batch_size=args.batch_size, n_workers=args.workers
+    data_test, utt2tones, include_segment_feats=INCLUDE_SEGMENT_FEATS, include_context=INCLUDE_CONTEXT,
+    include_spk=INCLUDE_SPK, long_context=LONG_CONTEXT, batch_size=args.batch_size, n_workers=args.workers
 )
 
 print('train size:', len(train_loader) * args.batch_size)
