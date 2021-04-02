@@ -227,17 +227,21 @@ class SpectrogramDataset(Dataset):
 class PhoneSegmentDataset(Dataset):
     def __init__(
             self, utt2tones: dict, include_segment_feats=False, context_size=0, include_spk=False,
+            tone_pattern=None,
     ):
         self.utt2tones = utt2tones
         self.utts = list(utt2tones.keys())
         self.include_segment_feats = include_segment_feats
         self.context_size = context_size
         self.include_spk = include_spk
+        self.tone_pattern = tone_pattern
 
         self._init_data()
+        self._subset_tone_pattern()
 
     def _init_data(self):
         tone2idx = {t: [] for t in range(NUM_CLASSES)}
+        self.utt_tone_seq = {u: [] for u in self.utts}  # used to match tone pattern, {utt -> tone_seq}
 
         self.flat_utts = []
         """utts of each phone sample"""
@@ -259,6 +263,8 @@ class PhoneSegmentDataset(Dataset):
             prev_durs = [0 for _ in range(self.context_size)]
             prev_phones = ['sil' for _ in range(self.context_size)]
             for i, (tone, phone, start, dur) in enumerate(data):
+                self.utt_tone_seq[utt].append(tone)
+
                 sample = [tone, utt, start, dur]
                 tone2idx[tone].append(idx)
                 self.flat_utts.append(utt)
@@ -310,7 +316,43 @@ class PhoneSegmentDataset(Dataset):
             np.random.shuffle(tone2idx[t])
             self.indices += tone2idx[t][:size]
         np.random.shuffle(self.indices)
-        self.size = len(self.indices)
+
+    def _subset_tone_pattern(self):
+        if self.tone_pattern is None:
+            return
+
+        indices = []
+        idx = 0
+        for utt, seq in self.utt_tone_seq.items():  # type: str, List[int]
+            # FIXME: brute force matching
+            n = len(self.tone_pattern)
+            seq_len = len(seq)
+            for i in range(seq_len - n):
+                tmp = []
+                matched = True
+                t = 0
+                j = i
+                while t < n and j < seq_len:
+                    if seq[j] == 0:  # skip no-tone
+                        j += 1
+                        continue
+
+                    if seq[j] != self.tone_pattern[t]:
+                        matched = False
+                        break
+
+                    tmp.append(idx + j)
+
+                    t += 1
+                    j += 1
+
+                if matched and len(tmp) == n:
+                    indices += tmp
+            idx += seq_len
+
+        self.indices = indices
+        np.random.shuffle(self.indices)
+        print(f'Number of samples that matches the tone pattern: {len(self.indices)}')
 
     def __getitem__(self, idx):
         idx = self.indices[idx]
@@ -334,7 +376,7 @@ class PhoneSegmentDataset(Dataset):
         return ret
 
     def __len__(self):
-        return self.size
+        return len(self.indices)
 
 
 class SequentialSpectrogramDataset(Dataset):
@@ -381,6 +423,7 @@ class SequentialSpectrogramDataset(Dataset):
 def create_dataloader(
         utts: list, utt2tones: dict, include_segment_feats=False,
         include_spk=False, context_size=0, batch_size=64, n_workers=10,
+        tone_pattern=None,
 ):
     u2t = {u: utt2tones[u] for u in utts}
 
@@ -395,6 +438,7 @@ def create_dataloader(
     return DataLoader(
         PhoneSegmentDataset(
             u2t, include_segment_feats=include_segment_feats, context_size=context_size, include_spk=include_spk,
+            tone_pattern=tone_pattern,
         ),
         batch_size=batch_size, num_workers=n_workers, collate_fn=collate_spectrogram,
     )
