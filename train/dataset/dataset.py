@@ -205,7 +205,7 @@ class SpectrogramDataset(Dataset):
         self.data = data
 
     def __getitem__(self, idx):
-        tone, utt, _, start, dur = self.data[idx]
+        tone, utt, start, dur = self.data[idx]
         x = self.extractor.load(utt, start, dur)
         x = torch.from_numpy(x.astype('float32'))
         return x, tone
@@ -216,15 +216,13 @@ class SpectrogramDataset(Dataset):
 
 class PhoneSegmentDataset(Dataset):
     def __init__(
-            self, utt2tones: dict, include_segment_feats=False, include_context=False, include_spk=False,
-            long_context=False,
+            self, utt2tones: dict, include_segment_feats=False, context_size=0, include_spk=False,
     ):
         self.utt2tones = utt2tones
         self.utts = list(utt2tones.keys())
         self.include_segment_feats = include_segment_feats
-        self.include_context = include_context
+        self.context_size = context_size
         self.include_spk = include_spk
-        self.long_context = long_context
 
         self._init_data()
 
@@ -244,49 +242,38 @@ class PhoneSegmentDataset(Dataset):
         for utt in self.utts:
             data = self.utt2tones[utt]
 
-            if len(data) < 3:
+            if len(data) < 1 + 2 * self.context_size:
                 continue
 
-            prev_dur = 0  # prev_dur of the first segment in a sentence is 0
-            prev_phone = 'sil'  # prev_phone of the first segment in a sentence is 'sil'
-            pprev_dur = 0
-            pprev_phone = 'sil'
+            prev_durs = [0 for _ in range(self.context_size)]
+            prev_phones = ['sil' for _ in range(self.context_size)]
             for i, (tone, phone, start, dur) in enumerate(data):
                 tone2idx[tone].append(idx)
                 self.flat_utts.append(utt)
 
-                # set the succeeding segment info of previous sample
-                if i > 0:
-                    self.durs[-1].append(dur)
-                    self.phones[-1].append(phone)
-                if self.long_context and i > 1:
-                    self.durs[-2].append(dur)
-                    self.phones[-2].append(phone)
+                # set the succeeding segment of previous sample(s)
+                for j in range(self.context_size):
+                    if j < i:
+                        self.durs[-1 - j].append(dur)
+                        self.phones[-1 - j].append(phone)
 
-                self.data.append([tone, utt, phone, start, dur])
+                assert len(prev_durs) == len(prev_phones) == self.context_size
+                self.data.append([tone, utt, start, dur])
+                self.durs.append(prev_durs + [dur])
+                self.phones.append(prev_phones + [phone])
 
-                if self.long_context:
-                    self.durs.append([pprev_dur, prev_dur, dur])
-                    self.phones.append([pprev_phone, prev_phone, phone])
-                else:
-                    self.durs.append([prev_dur, dur])
-                    self.phones.append([prev_phone, phone])
-
-                pprev_dur = prev_dur
-                pprev_phone = prev_phone
-                prev_dur = dur
-                prev_phone = phone
+                if self.context_size:
+                    prev_durs.pop(0)
+                    prev_durs.append(dur)
+                    prev_phones.pop(0)
+                    prev_phones.append(phone)
 
                 idx += 1
 
-            # set the succeeding segment info of previous sample
-            self.durs[-1].append(0)
-            self.phones[-1].append('sil')
-            if self.long_context:
-                self.durs[-1].append(0)
-                self.phones[-1].append('sil')
-                self.durs[-2].append(0)
-                self.phones[-2].append('sil')
+            # set the succeeding segment of the last few samples
+            for j in range(self.context_size):
+                self.durs[-1 - j] += [0 for _ in range(self.context_size - j)]
+                self.phones[-1 - j] += ['sil' for _ in range(self.context_size - j)]
 
         assert len(self.data) == len(self.durs) == len(self.phones) == len(self.flat_utts)
 
@@ -311,27 +298,19 @@ class PhoneSegmentDataset(Dataset):
 
     def __getitem__(self, idx):
         idx = self.indices[idx]
-        tone, utt, phone, start, dur = self.data[idx]
 
         spectro, y = self._dataset[idx]
-
         ret = [spectro, y]
 
         if self.include_segment_feats:
             # durations
-            if self.include_context:
-                ret.append(self.durs[idx])
-            else:
-                ret.append([dur, ])
+            ret.append(self.durs[idx])
 
             # onehot encodings
-            if self.include_context:
-                onehot = [
-                    torch.from_numpy(PHONE_TO_ONEHOT[ph]).type(torch.float32)
-                    for ph in self.phones[idx]
-                ]
-            else:
-                onehot = [torch.from_numpy(PHONE_TO_ONEHOT[phone]).type(torch.float32)]
+            onehot = [
+                torch.from_numpy(PHONE_TO_ONEHOT[ph]).type(torch.float32)
+                for ph in self.phones[idx]
+            ]
             ret.append(torch.cat(onehot))
 
         if self.include_spk:
@@ -384,8 +363,8 @@ class SequentialSpectrogramDataset(Dataset):
 
 
 def create_dataloader(
-        utts: list, utt2tones: dict, include_segment_feats=False, include_context=False,
-        include_spk=False, long_context=False, batch_size=64, n_workers=10,
+        utts: list, utt2tones: dict, include_segment_feats=False,
+        include_spk=False, context_size=0, batch_size=64, n_workers=10,
 ):
     u2t = {u: utt2tones[u] for u in utts}
 
@@ -399,8 +378,7 @@ def create_dataloader(
 
     return DataLoader(
         PhoneSegmentDataset(
-            u2t, include_segment_feats=include_segment_feats, include_context=include_context,
-            include_spk=include_spk, long_context=long_context,
+            u2t, include_segment_feats=include_segment_feats, context_size=context_size, include_spk=include_spk,
         ),
         batch_size=batch_size, num_workers=n_workers, collate_fn=collate_spectrogram,
     )

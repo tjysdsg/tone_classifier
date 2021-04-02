@@ -113,25 +113,20 @@ class BLSTMStatsPool(nn.Module):
 class EmbeddingModel(nn.Module):
     def __init__(
             self, model: nn.Module, embedding_size: int, num_classes: int, hidden_size=128, include_segment_feats=False,
-            include_context=False, include_spk=False, long_context=False,
+            context_size=0, include_spk=False,
     ):
         super().__init__()
         self.include_segment_feats = include_segment_feats
-        self.include_context = include_context
+        self.context_size = context_size
         self.include_spk = include_spk
-        self.long_context = long_context
 
         self.model1 = model
 
         seg_feat_size = 0
         if self.include_segment_feats:
             seg_feat_size += 1 + N_PHONES
-        if self.include_context:
-            if self.long_context:
-                seg_feat_size *= 5
-            else:
-                seg_feat_size *= 3
 
+        seg_feat_size *= 1 + 2 * self.context_size
         if seg_feat_size > 0:
             self.model2 = nn.Linear(seg_feat_size, hidden_size)
 

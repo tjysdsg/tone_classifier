@@ -31,9 +31,8 @@ parser.add_argument('--test_data_name', default='test', type=str)
 parser.add_argument('--use_attention', default=False, action='store_true')
 
 parser.add_argument('--include_segment_feats', default=False, action='store_true')
-parser.add_argument('--include_context', default=False, action='store_true')
 parser.add_argument('--include_spk', default=False, action='store_true')
-parser.add_argument('--long_context', default=False, action='store_true')
+parser.add_argument('--context_size', default=0, type=int)
 
 parser.add_argument('--lr', default=0.001, type=float)
 parser.add_argument('--warm_up_epoch', default=3, type=int)
@@ -53,14 +52,12 @@ os.makedirs(f'exp/{SAVE_DIR}', exist_ok=True)
 print(f'Saving logs and output to exp/{SAVE_DIR}')
 
 INCLUDE_SEGMENT_FEATS = args.include_segment_feats
-INCLUDE_CONTEXT = args.include_context
 INCLUDE_SPK = args.include_spk
-LONG_CONTEXT = args.long_context
+CONTEXT_SIZE = args.context_size
 print(
-    f'Using segment features: {INCLUDE_SEGMENT_FEATS}'
-    f'\nUsing context: {INCLUDE_CONTEXT}\n'
+    f'Using segment features: {INCLUDE_SEGMENT_FEATS}\n'
     f'Using speaker embedding: {INCLUDE_SPK}\n'
-    f'Using long context: {LONG_CONTEXT}'
+    f'Context size: {CONTEXT_SIZE}'
 )
 
 logger = create_logger('train_embedding', f'exp/{SAVE_DIR}/{args.action}_{args.start_epoch}.log')
@@ -72,12 +69,12 @@ utt2tones: dict = json.load(open('utt2tones.json'))
 data_train: list = json.load(open(f'{DATA_DIR}/train_utts.json'))
 data_test: list = json.load(open(f'{DATA_DIR}/test_utts.json'))
 train_loader = create_dataloader(
-    data_train, utt2tones, include_segment_feats=INCLUDE_SEGMENT_FEATS, include_context=INCLUDE_CONTEXT,
-    include_spk=INCLUDE_SPK, long_context=LONG_CONTEXT, batch_size=args.batch_size, n_workers=args.workers
+    data_train, utt2tones, include_segment_feats=INCLUDE_SEGMENT_FEATS, context_size=CONTEXT_SIZE,
+    include_spk=INCLUDE_SPK, batch_size=args.batch_size, n_workers=args.workers
 )
 test_loader = create_dataloader(
-    data_test, utt2tones, include_segment_feats=INCLUDE_SEGMENT_FEATS, include_context=INCLUDE_CONTEXT,
-    include_spk=INCLUDE_SPK, long_context=LONG_CONTEXT, batch_size=args.batch_size, n_workers=args.workers
+    data_test, utt2tones, include_segment_feats=INCLUDE_SEGMENT_FEATS, context_size=CONTEXT_SIZE,
+    include_spk=INCLUDE_SPK, batch_size=args.batch_size, n_workers=args.workers
 )
 
 print('train size:', len(train_loader) * args.batch_size)
@@ -90,8 +87,8 @@ else:
     inner_model = ResNet34StatsPool(IN_PLANES, EMBD_DIM, dropout=0.5).cuda()
 
 model = EmbeddingModel(
-    inner_model, EMBD_DIM, NUM_CLASSES, include_segment_feats=INCLUDE_SEGMENT_FEATS, include_context=INCLUDE_CONTEXT,
-    include_spk=INCLUDE_SPK, long_context=LONG_CONTEXT,
+    inner_model, EMBD_DIM, NUM_CLASSES, include_segment_feats=INCLUDE_SEGMENT_FEATS, context_size=CONTEXT_SIZE,
+    include_spk=INCLUDE_SPK,
 ).cuda()
 
 # criterion, optimizer, scheduler
