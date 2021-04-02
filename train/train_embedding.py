@@ -21,7 +21,7 @@ torch.multiprocessing.set_sharing_strategy('file_system')
 parser = argparse.ArgumentParser(description='Training embedding')
 parser.add_argument('--save_dir', type=str)
 
-parser.add_argument('-j', '--workers', default=8, type=int)
+parser.add_argument('-j', '--workers', default=16, type=int)
 parser.add_argument('-b', '--batch_size', default=64, type=int)
 
 parser.add_argument('--data_dir', default='data', type=str)
@@ -151,8 +151,8 @@ def train():
 
             optimizer.step()
 
-            losses.update(loss.data.item(), x.size(0))
-            acc.update(accuracy(y_pred.data, y), x.size(0))
+            losses.update(loss.data.item(), y.size(0))
+            acc.update(accuracy(y_pred.data, y), y.size(0))
 
             # update progress bar
             t.set_postfix(loss=losses.val, loss_avg=losses.avg, acc=acc.val, acc_avg=acc.avg, lr=get_lr(optimizer))
