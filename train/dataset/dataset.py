@@ -18,15 +18,11 @@ def collate_spectrogram(batch):
 
     ret = [x, y]
     if len(transposed) >= 3:
-        try:
-            durs = torch.as_tensor(transposed[2], dtype=torch.float32)  # (batch, 3)
-            ret.append(durs)
-        except Exception:
-            print([t for t in transposed[2] if len(t) != 5])
-            raise RuntimeError("FUCK")
+        durs = torch.as_tensor(transposed[2], dtype=torch.float32)  # (batch, context_size)
+        ret.append(durs)
 
     if len(transposed) >= 4:
-        onehots = torch.stack(transposed[3])  # (batch, n_phones)
+        onehots = torch.stack(transposed[3])  # (batch, n_phones * context_size)
         ret.append(onehots)
 
     if len(transposed) >= 5:
@@ -247,6 +243,10 @@ class PhoneSegmentDataset(Dataset):
         idx = 0
         for utt in self.utts:
             data = self.utt2tones[utt]
+
+            if len(data) < 3:
+                continue
+
             prev_dur = 0  # prev_dur of the first segment in a sentence is 0
             prev_phone = 'sil'  # prev_phone of the first segment in a sentence is 'sil'
             pprev_dur = 0
