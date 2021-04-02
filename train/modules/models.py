@@ -10,7 +10,7 @@ from torch.nn.utils.rnn import pad_sequence
 from train.config import N_PHONES, SPEAKER_EMBEDDING_SIZE
 
 __all__ = [
-    'ResNet34AttStatsPool', 'ResNet34StatsPool', 'TDNNStatsPool', 'BLSTMStatsPool', 'EmbeddingModel', 'ContextualModel'
+    'ResNet34AttStatsPool', 'ResNet34StatsPool', 'TDNNStatsPool', 'BLSTMStatsPool', 'EmbeddingModel',
 ]
 
 
@@ -119,6 +119,7 @@ class EmbeddingModel(nn.Module):
         self.include_segment_feats = include_segment_feats
         self.context_size = context_size
         self.include_spk = include_spk
+        size_multiplier = 1 + 2 * self.context_size
 
         self.model1 = model
 
@@ -126,24 +127,26 @@ class EmbeddingModel(nn.Module):
         if self.include_segment_feats:
             seg_feat_size += 1 + N_PHONES
 
-        seg_feat_size *= 1 + 2 * self.context_size
+        seg_feat_size *= size_multiplier
         if seg_feat_size > 0:
             self.model2 = nn.Linear(seg_feat_size, hidden_size)
 
         if self.include_spk:
             self.model3 = nn.Linear(SPEAKER_EMBEDDING_SIZE, hidden_size)
 
-        final_size = embedding_size
+        final_size = size_multiplier * embedding_size
         if include_segment_feats:
             final_size += hidden_size
         if include_spk:
             final_size += hidden_size
         self.classifier = nn.Linear(final_size, num_classes).cuda()
 
-    def forward(self, x, durs=None, onehots=None, spk_embd=None):
-        x = self.model1(x)  # (batch, embedding_size)
-        x = F.relu(x)
-        xs = [x]
+    def forward(self, xs: List[torch.Tensor], durs=None, onehots=None, spk_embd=None):
+        tone_embeddings = [self.model1(x.cuda()) for x in xs]  # (batch, embedding_size)
+        tone_embeddings = [F.relu(x) for x in tone_embeddings]
+        tone_embeddings = torch.hstack(tone_embeddings)
+
+        feats = [tone_embeddings]
 
         extra_feats = []
         if self.include_segment_feats:
@@ -156,48 +159,13 @@ class EmbeddingModel(nn.Module):
             x1 = torch.flatten(x1, 1)
             x1 = self.model2(x1.cuda())
             x1 = F.relu(x1)
-            xs.append(x1)
+            feats.append(x1)
 
         if self.include_spk:
             assert spk_embd is not None
             x1 = self.model3(spk_embd.cuda())
             x1 = F.relu(x1)
-            xs.append(x1)
+            feats.append(x1)
 
-        x = torch.hstack(xs)
-        out = self.classifier(x)
-        return out
-
-
-class ContextualModel(nn.Module):
-    def __init__(self, embd_model: nn.Module, model: nn.Module, include_dur=False):
-        super().__init__()
-        self.embd_model = embd_model
-        self.model = model
-        self.include_dur = include_dur
-
-    def forward(self, packed):
-        """
-        X shape: (utts, seq_len, time, mels)
-        """
-        self.embd_model.eval()
-
-        items: List = list(zip(*packed))
-        feats: List[SpectroFeat] = items[0]  # (utts, seq_len', sig_len', mels)
-        lengths = items[1]
-
-        embds = []
-        for feat in feats:
-            x = feat.spectro
-            x = x.type(torch.float32).cuda()  # (seq_len, sig_len, mels)
-
-            embd = self.embd_model(x)
-
-            if self.include_dur:
-                sig_lens = torch.as_tensor(feat.lengths, dtype=torch.float32)
-                embd = torch.stack([embd, sig_lens])
-
-            embds.append(embd)  # embds: (utt, seq_len', embd_size)
-
-        feat = pad_sequence(embds, batch_first=True)
-        return self.model(feat, lengths)
+        feats = torch.hstack(feats)
+        return self.classifier(feats)

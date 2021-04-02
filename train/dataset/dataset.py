@@ -10,13 +10,14 @@ from typing import List
 
 def collate_spectrogram(batch):
     transposed: List = list(zip(*batch))
-    x = transposed[0]
+    xs = transposed[0]
+    xs: List = list(zip(*xs))
+    xs = [pad_sequence(x, batch_first=True) for x in xs]  # (batch, seq_len, mels)
+
     y = transposed[1]
-
     y = torch.from_numpy(np.asarray(y, dtype='int64'))
-    x = pad_sequence(x, batch_first=True)  # (batch, seq_len, mels)
 
-    ret = [x, y]
+    ret = [xs, y]
     if len(transposed) >= 3:
         durs = torch.as_tensor(transposed[2], dtype=torch.float32)  # (batch, context_size)
         ret.append(durs)
@@ -205,10 +206,19 @@ class SpectrogramDataset(Dataset):
         self.data = data
 
     def __getitem__(self, idx):
-        tone, utt, start, dur = self.data[idx]
-        x = self.extractor.load(utt, start, dur)
-        x = torch.from_numpy(x.astype('float32'))
-        return x, tone
+        context = self.data[idx]
+        xs = []
+        for tone, utt, start, dur in context:
+            if dur == 0:
+                # FIXME: don't hardcode number of mels
+                x = torch.zeros(1, 64)
+            else:
+                x = self.extractor.load(utt, start, dur)
+                x = torch.from_numpy(x.astype('float32'))
+            xs.append(x)
+
+        idx = len(context) // 2  # the middle one
+        return xs, context[idx][0]
 
     def __len__(self):
         return len(self.data)
@@ -245,24 +255,29 @@ class PhoneSegmentDataset(Dataset):
             if len(data) < 1 + 2 * self.context_size:
                 continue
 
+            prev_samples = [[-1, utt, 0, 0] for _ in range(self.context_size)]
             prev_durs = [0 for _ in range(self.context_size)]
             prev_phones = ['sil' for _ in range(self.context_size)]
             for i, (tone, phone, start, dur) in enumerate(data):
+                sample = [tone, utt, start, dur]
                 tone2idx[tone].append(idx)
                 self.flat_utts.append(utt)
 
                 # set the succeeding segment of previous sample(s)
                 for j in range(self.context_size):
                     if j < i:
+                        self.data[-1 - j].append(sample)
                         self.durs[-1 - j].append(dur)
                         self.phones[-1 - j].append(phone)
 
-                assert len(prev_durs) == len(prev_phones) == self.context_size
-                self.data.append([tone, utt, start, dur])
+                assert len(prev_samples) == len(prev_durs) == len(prev_phones) == self.context_size
+                self.data.append(prev_samples + [sample])
                 self.durs.append(prev_durs + [dur])
                 self.phones.append(prev_phones + [phone])
 
                 if self.context_size:
+                    prev_samples.pop(0)
+                    prev_samples.append(sample)
                     prev_durs.pop(0)
                     prev_durs.append(dur)
                     prev_phones.pop(0)
@@ -272,6 +287,7 @@ class PhoneSegmentDataset(Dataset):
 
             # set the succeeding segment of the last few samples
             for j in range(self.context_size):
+                self.data[-1 - j] += [[-1, utt, 0, 0] for _ in range(self.context_size - j)]
                 self.durs[-1 - j] += [0 for _ in range(self.context_size - j)]
                 self.phones[-1 - j] += ['sil' for _ in range(self.context_size - j)]
 

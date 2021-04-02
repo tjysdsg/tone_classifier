@@ -124,7 +124,7 @@ def step(batch: Tuple) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     if len(batch) >= 5:
         spk_embd = batch[4]
 
-    x, y = x.cuda(), y.cuda()
+    y = y.cuda()
     y_pred = model(x, durs, onehots, spk_embd)
     return x, y, y_pred
 
