@@ -21,7 +21,7 @@ torch.multiprocessing.set_sharing_strategy('file_system')
 parser = argparse.ArgumentParser(description='Training embedding')
 parser.add_argument('--save_dir', type=str)
 
-parser.add_argument('-j', '--workers', default=16, type=int)
+parser.add_argument('-j', '--workers', default=20, type=int)
 parser.add_argument('-b', '--batch_size', default=64, type=int)
 
 parser.add_argument('--data_dir', default='data', type=str)
@@ -38,6 +38,7 @@ parser.add_argument('--lr', default=0.001, type=float)
 parser.add_argument('--warm_up_epoch', default=3, type=int)
 parser.add_argument('--lr_patience', default=1, type=int)
 
+parser.add_argument('--utt_list', default='', type=str)  # for inference
 parser.add_argument('action', type=str, default='train', nargs='?')
 parser.add_argument('--epochs', default=500, type=int)
 parser.add_argument('--start_epoch', default=0, type=int)
@@ -68,15 +69,17 @@ utt2tones: dict = json.load(open('utt2tones.json'))
 # data loaders
 data_train: list = json.load(open(f'{DATA_DIR}/train_utts.json'))
 data_test: list = json.load(open(f'{DATA_DIR}/test_utts.json'))
-train_loader = create_dataloader(
-    data_train, utt2tones, include_segment_feats=INCLUDE_SEGMENT_FEATS, context_size=CONTEXT_SIZE,
-    include_spk=INCLUDE_SPK, batch_size=args.batch_size, n_workers=args.workers
-)
-test_loader = create_dataloader(
-    data_test, utt2tones, include_segment_feats=INCLUDE_SEGMENT_FEATS, context_size=CONTEXT_SIZE,
-    include_spk=INCLUDE_SPK, batch_size=args.batch_size, n_workers=args.workers
-)
 
+
+def _create_loader(utt_list):
+    return create_dataloader(
+        utt_list, utt2tones, include_segment_feats=INCLUDE_SEGMENT_FEATS, context_size=CONTEXT_SIZE,
+        include_spk=INCLUDE_SPK, batch_size=args.batch_size, n_workers=args.workers
+    )
+
+
+train_loader = _create_loader(data_train)
+test_loader = _create_loader(data_test)
 print('train size:', len(train_loader) * args.batch_size)
 print('test size:', len(test_loader) * args.batch_size)
 
@@ -253,5 +256,9 @@ if __name__ == '__main__':
         tsne(test_loader)
     elif args.action == 'pca':
         pca(test_loader)
+    elif args.action == 'infer':
+        ys, preds = infer(test_loader)
+        np.savetxt(f'exp/{SAVE_DIR}/ys.txt', ys)
+        np.savetxt(f'exp/{SAVE_DIR}/preds.txt', preds)
     else:
         raise RuntimeError(f"Unknown action: {args.action}")
