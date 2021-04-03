@@ -21,7 +21,7 @@ torch.multiprocessing.set_sharing_strategy('file_system')
 parser = argparse.ArgumentParser(description='Training embedding')
 parser.add_argument('--save_dir', type=str)
 
-parser.add_argument('-j', '--workers', default=20, type=int)
+parser.add_argument('-j', '--workers', default=10, type=int)
 parser.add_argument('-b', '--batch_size', default=32, type=int)
 
 parser.add_argument('--data_dir', default='data', type=str)
