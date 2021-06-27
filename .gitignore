@@ -3,6 +3,7 @@ tmp/
 alignments/
 data/
 feats/
+.idea/
 
 ### C++ ###
 # Prerequisites
