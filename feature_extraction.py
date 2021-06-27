@@ -1,10 +1,16 @@
 import json
+import argparse
 
 # 声母
 INITIALS = ['b', 'c', 'ch', 'd', 'f', 'g', 'h', 'j', 'k', 'l', 'm', 'n', 'p', 'q', 'r', 's', 'sh', 't', 'w', 'x', 'y',
             'z', 'zh']
 OUTDIR = 'feats'
 FRAME_SUBSAMPLING_FACTOR = 3
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--use-tritone', type=bool, default=True)
+parser.add_argument('--output-path', type=str, default='utt2tones.json')
+args = parser.parse_args()
 
 
 def main():
@@ -59,16 +65,20 @@ def main():
 
             # tri-tone
             # NOTE: don't change the value of dur, it's the true duration of this phone
-            if utt != prev_utt:
-                utt2time[utt].append([start, dur, tone, phone])
-            else:
-                # include this phone in the previous tri-tone
-                utt2time[utt][-1][1] += dur / 2
+            if args.use_tritone:
+                if utt != prev_utt:
+                    utt2time[utt].append([start, dur, tone, phone])
+                else:
+                    # include this phone in the previous tri-tone
+                    utt2time[utt][-1][1] += dur / 2
 
-                # include previous phone in this tri-tone
-                utt2time[utt].append(
-                    [start - prev_dur / 2, prev_dur / 2 + dur, tone, phone]
-                )
+                    # include previous phone in this tri-tone
+                    utt2time[utt].append(
+                        [start - prev_dur / 2, prev_dur / 2 + dur, tone, phone]
+                    )
+            else:
+                utt2time[utt].append([start, dur, tone, phone])
+
             prev_dur = dur
             prev_utt = utt
 
@@ -98,11 +108,8 @@ def main():
             if utt not in utt2tones:
                 utt2tones[utt] = []
             utt2tones[utt].append([tone, phone, start, dur])
-            # utts.append([tone, utt, phone, start, dur])
 
-    # with open('utts.json', 'w') as f:
-    #     json.dump(utts, f)
-    with open('utt2tones.json', 'w') as f:
+    with open(args.output_path, 'w') as f:
         json.dump(utt2tones, f)
 
 

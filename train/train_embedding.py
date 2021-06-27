@@ -24,6 +24,7 @@ parser.add_argument('--save_dir', type=str)
 parser.add_argument('-j', '--workers', default=10, type=int)
 parser.add_argument('-b', '--batch_size', default=32, type=int)
 
+parser.add_argument('--utt2tones', default='utt2tones.json', type=str)
 parser.add_argument('--data_dir', default='data', type=str)
 parser.add_argument('--val_data_name', default='val', type=str)
 parser.add_argument('--test_data_name', default='test', type=str)
@@ -64,7 +65,7 @@ print(
 logger = create_logger('train_embedding', f'exp/{SAVE_DIR}/{args.action}_{args.start_epoch}.log')
 logger.info(" ".join(sys.argv))  # save entire command for reproduction
 
-utt2tones: dict = json.load(open('utt2tones.json'))
+utt2tones: dict = json.load(open(args.utt2tones))
 
 # data loaders
 data_train: list = json.load(open(f'{DATA_DIR}/train_utts.json'))
