@@ -90,3 +90,11 @@ def cepstrum(signal, samplerate=16000, winlen=0.025, winstep=0.01, nfft=512, pre
     spec[np.where(spec == 0)] = np.finfo(float).eps  # if energy is zero, we get problems with log
 
     return np.fft.irfft(spec)
+
+
+if __name__ == '__main__':
+    import librosa
+
+    waveform, sample_rate = librosa.load('test.wav')
+    mat = cepstrum(waveform, samplerate=sample_rate)
+    print(mat.shape)
