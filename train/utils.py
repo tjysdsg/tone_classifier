@@ -2,9 +2,20 @@ import os
 import sys
 import torch
 import logging
-from typing import List
+from typing import List, Dict, Any
 import numpy as np
 import random
+
+
+def load_utt2seq(path: str, formatter=str) -> Dict[str, List[Any]]:
+    ret = {}
+    with open(path) as f:
+        for line in f:
+            tokens = line.strip('\n').split()
+            utt = tokens[0]
+            ret[utt] = [formatter(e) for e in tokens[1:]]
+
+    return ret
 
 
 def onehot_encode(idx: int, num_classes: int) -> np.ndarray:

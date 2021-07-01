@@ -32,24 +32,17 @@ def collate_spectrogram(batch):
     return ret
 
 
-def pad_seq(labels: List[torch.Tensor], padding_value=0) -> torch.Tensor:
-    max_len = np.max([e.shape[0] for e in labels])
-    ret = torch.full((len(labels), max_len), padding_value)
-    for i, e in enumerate(labels):
-        len_e = e.shape[0]
-        ret[i, :len_e] = e
-    return ret
+def collate_cepstrum(batch):
+    transposed: List = list(zip(*batch))
 
+    xs = transposed[0]
+    xs = pad_sequence(xs, batch_first=True)  # (batch, seq_len, nfft)
 
-def collate_sequential_spectrogram(batch):
-    transposed: list = list(zip(*batch))
-    spectrograms: List[SpectroFeat] = transposed[0]  # (batch_size, seq_len, ...)
-    x = [[e, e.spectro.shape[0]] for e in spectrograms]
+    ys = transposed[1]
+    lengths = [y.shape[0] for y in ys]
+    ys = pad_sequence(ys, batch_first=True)  # (batch, seq_len, vocab_size)
 
-    y = transposed[1]  # (batch_size, seq_len)
-    y = pad_seq(y, padding_value=-100)  # -100 is ignored by NLLLoss
-
-    return x, torch.as_tensor(y, dtype=torch.long)
+    return [xs, ys, lengths]
 
 
 def get_spk_from_utt(utt: str):
@@ -379,45 +372,33 @@ class PhoneSegmentDataset(Dataset):
         return len(self.indices)
 
 
-class SequentialSpectrogramDataset(Dataset):
-    def __init__(self, utt2tones: dict, include_dur=False):
-        self.utts = list(utt2tones.keys())
-        self.utt2tones = utt2tones
-        self.extractor = CachedSpectrogramExtractor(os.path.join(CACHE_DIR, 'spectro'))
-        self.include_dur = include_dur
+class CepstrumDataset(Dataset):
+    def __init__(self, text: str, wavscp: str, vocab_size: int, nfft=512, sr=16000):
+        from train.utils import load_utt2seq
 
-        self.sequences = []
-        for utt in self.utts:
-            data = self.utt2tones[utt]
-            self.sequences.append((utt, data))
+        self.sr = sr
+        self.nfft = nfft
+        self.vocab_size = vocab_size
 
-    def __len__(self):
-        return len(self.sequences)
+        self.utt2tones = load_utt2seq(text, int)
+        self.utt2path = load_utt2seq(wavscp)
+        self.utts = list(set(self.utt2tones.keys()) & set(self.utt2path.keys()))
 
     def __getitem__(self, idx):
-        utt, seq = self.sequences[idx]
+        from train.dataset.cepstrum import cepstrum
+        from train.utils import onehot_encode
 
-        xs = []
-        ys = []
-        lengths = []
-        for tone, phone, start, dur in seq:
-            x = self.extractor.load(utt, start, dur)
+        utt = self.utts[idx]
+        y, _ = librosa.load(self.utt2path[utt], sr=self.sr)
+        ceps = cepstrum(y, self.sr, nfft=self.nfft)
+        ceps = np.asarray(ceps, dtype='float32')
 
-            if self.include_dur:
-                lengths.append(x.shape[0])
+        tones = [onehot_encode(i, self.vocab_size) for i in self.utt2tones[utt]]
 
-            x = torch.from_numpy(x.astype('float32'))
-            xs.append(x)
-            ys.append(tone)
+        return torch.from_numpy(ceps), torch.as_tensor(tones, dtype=torch.int)
 
-        x = pad_sequence(xs, batch_first=True)  # (seq_len, sig_len, mels)
-        y = torch.as_tensor(ys, dtype=torch.long)  # (seq_len,)
-
-        feat = SpectroFeat(x)
-        if self.include_dur:
-            feat.lengths = lengths
-
-        return feat, y
+    def __len__(self):
+        return len(self.utts)
 
 
 def create_dataloader(
