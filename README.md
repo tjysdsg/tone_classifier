@@ -1,6 +1,6 @@
-- Place your own `phone_ctm.txt` file in project root dir, or use the default one generated
-  from https://github.com/tjysdsg/aidatatang_force_align on AISHELL-3 data
-- Run
+1. Place your own `phone_ctm.txt` file in project root dir, or use the default one generated
+   from https://github.com/tjysdsg/aidatatang_force_align on AISHELL-3 data
+2. Run
 
 ```bash
   python feature_extration.py
@@ -8,7 +8,7 @@
 
 to collect required statistics (phone start time, duration, tones, etc). Results are saved to `utt2tones.json`
 
-- Run
+3. Run
 
 ```bash
   python trian/embedding/split_wavs.py
@@ -16,7 +16,7 @@ to collect required statistics (phone start time, duration, tones, etc). Results
 
 to split train, test, and validation dataset for embedding model training
 
-- Run
+4. Run
 
 ```bash
 python train/train_embedding.py
@@ -26,4 +26,12 @@ to train embedding model, the results are in `exp/`
 
 Mel-spectrogram cache is generated at `exp/cache/spectro/wav.scp` and `exp/cache/spectro/*.npy`
 
-TODO: explain training script arguments
+## [Optional] Train CTC tone recognizer
+
+After step 3,
+
+- Run the following at `ctc_lifters/`
+
+```bash
+./run.sh
+```
