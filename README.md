@@ -26,12 +26,16 @@ to train embedding model, the results are in `exp/`
 
 Mel-spectrogram cache is generated at `exp/cache/spectro/wav.scp` and `exp/cache/spectro/*.npy`
 
-## [Optional] Train CTC tone recognizer
+## [Optional] Train an end-to-end tone recognizer
 
 After step 3,
 
-- Run the following at `ctc_lifters/`
+- Run the following at `e2e_tone_recog/`
 
 ```bash
 ./run.sh
 ```
+
+## [Optional] Reproduce "Tone Recognition Using Lifters and CTC"
+
+TODO
