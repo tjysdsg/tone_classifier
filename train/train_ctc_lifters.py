@@ -49,7 +49,7 @@ VOCAB_SIZE = NUM_CLASSES + 2  # num classes + <blank> + <sos/eos>
 
 def _create_loader(text: str, wavscp: str):
     return DataLoader(
-        CepstrumDataset(text, wavscp, vocab_size=VOCAB_SIZE),
+        CepstrumDataset(text, wavscp),
         batch_size=args.batch_size, num_workers=args.workers, collate_fn=collate_cepstrum,
     )
 
@@ -60,7 +60,7 @@ print('train size:', len(train_loader) * args.batch_size)
 print('test size:', len(test_loader) * args.batch_size)
 
 # models
-model = End2End(512, 128, VOCAB_SIZE).cuda()
+model = End2End(128, VOCAB_SIZE).cuda()
 
 optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=0.9)
 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=args.lr_patience, factor=0.1)
@@ -78,13 +78,13 @@ if start_epoch != 0:
 
 def step(batch: Tuple) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     x, y, y_lengths = batch
-    y_pred, pred_lengths = model(x, y, y_lengths)
+    y_pred, pred_lengths = model(x)
     return x, y, y_pred, pred_lengths, y_lengths
 
 
 def train():
     for epoch in range(start_epoch, epochs):
-        losses, acc = AverageMeter(), AverageMeter()
+        losses = AverageMeter()
         model.train()
 
         # progress bar
@@ -93,30 +93,29 @@ def train():
 
         for i, batch in enumerate(train_loader):
             x, y, y_pred, pred_lengths, y_lengths = step(batch)
-            loss = model.loss(y_pred, y, pred_lengths, y_lengths)
+            loss = model.module.loss(y_pred, y, pred_lengths, y_lengths)
 
             optimizer.zero_grad()
             loss.backward()
 
-            if args.use_attention:
-                _ = nn.utils.clip_grad_norm_(model.parameters(), MAX_GRAD_NORM)
-                _ = nn.utils.clip_grad_norm_(model.parameters(), MAX_GRAD_NORM)
+            _ = nn.utils.clip_grad_norm_(model.parameters(), MAX_GRAD_NORM)
+            _ = nn.utils.clip_grad_norm_(model.parameters(), MAX_GRAD_NORM)
 
             optimizer.step()
 
             losses.update(loss.data.item(), y.size(0))
-            acc.update(accuracy(y_pred.data, y), y.size(0))
 
             # update progress bar
-            t.set_postfix(loss=losses.val, loss_avg=losses.avg, acc=acc.val, acc_avg=acc.avg, lr=get_lr(optimizer))
+            t.set_postfix(loss=losses.val, loss_avg=losses.avg, lr=get_lr(optimizer))
             t.update()
 
         save_checkpoint(f'exp/{SAVE_DIR}', epoch, model, optimizer, scheduler)
 
-        acc_val = validate(test_loader)
+        # FIXME:
+        # acc_val = validate(test_loader)
         logger.info(
-            '\nEpoch %d\t  Loss %.4f\t  Accuracy %3.3f\t  lr %f\t  acc_val %3.3f\n'
-            % (epoch, losses.avg, acc.avg, get_lr(optimizer), acc_val)
+            '\nEpoch %d\tLoss %.4f\tlr %f\tVal Acc %3.3f\n'
+            % (epoch, losses.avg, get_lr(optimizer), -1000.0)
         )
 
         scheduler.step(losses.avg)

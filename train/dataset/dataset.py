@@ -42,7 +42,7 @@ def collate_cepstrum(batch):
     lengths = [y.shape[0] for y in ys]
     ys = pad_sequence(ys, batch_first=True)  # (batch, seq_len, vocab_size)
 
-    return [xs, ys, lengths]
+    return [xs, ys, torch.as_tensor(lengths, dtype=torch.int)]
 
 
 def get_spk_from_utt(utt: str):
@@ -373,12 +373,11 @@ class PhoneSegmentDataset(Dataset):
 
 
 class CepstrumDataset(Dataset):
-    def __init__(self, text: str, wavscp: str, vocab_size: int, nfft=512, sr=16000):
+    def __init__(self, text: str, wavscp: str, nfft=512, sr=16000):
         from train.utils import load_utt2seq
 
         self.sr = sr
         self.nfft = nfft
-        self.vocab_size = vocab_size
 
         self.utt2tones = load_utt2seq(text, int)
         self.utt2path = load_utt2seq(wavscp)
@@ -386,16 +385,15 @@ class CepstrumDataset(Dataset):
 
     def __getitem__(self, idx):
         from train.dataset.cepstrum import cepstrum
-        from train.utils import onehot_encode
 
         utt = self.utts[idx]
-        y, _ = librosa.load(self.utt2path[utt], sr=self.sr)
+        y, _ = librosa.load(self.utt2path[utt][0], sr=self.sr)
         ceps = cepstrum(y, self.sr, nfft=self.nfft)
         ceps = np.asarray(ceps, dtype='float32')
 
-        tones = [onehot_encode(i, self.vocab_size) for i in self.utt2tones[utt]]
+        tones = np.asarray(self.utt2tones[utt], dtype='int') + 1  # plus 1 because <blank>
 
-        return torch.from_numpy(ceps), torch.as_tensor(tones, dtype=torch.int)
+        return torch.from_numpy(ceps), torch.from_numpy(tones)
 
     def __len__(self):
         return len(self.utts)
