@@ -11,10 +11,7 @@ class End2End(torch.nn.Module):
             blank=0,
     ):
         super().__init__()
-        # note that eos is the same as sos (equivalent ID)
         self.blank = blank
-        self.sos = vocab_size - 1
-        self.eos = vocab_size - 1
         self.vocab_size = vocab_size
 
         self.conv1 = nn.Conv2d(in_channels=1, out_channels=16, stride=1, kernel_size=11)
@@ -79,3 +76,27 @@ class End2End(torch.nn.Module):
         pred = F.log_softmax(pred, dim=-1)
         pred = pred.permute(1, 0, 2)  # (time convolved, batch, vocab_size)
         return self.ctc(pred, y, pred_lengths, y_lengths)
+
+    def predict(self, speech: torch.Tensor):
+        from ctcdecode import CTCBeamDecoder
+
+        pred, _ = self(speech)
+        pred = F.log_softmax(pred, dim=-1)
+
+        decoder = CTCBeamDecoder(
+            '_012345',
+            model_path=None,
+            alpha=0,
+            beta=0,
+            cutoff_top_n=40,
+            cutoff_prob=1.0,
+            beam_width=40,
+            num_processes=10,
+            blank_id=0,
+            log_probs_input=True
+        )
+        beam_results, beam_scores, timesteps, out_lens = decoder.decode(pred)
+        beam_results = beam_results.detach().cpu().numpy().tolist()
+        batch_size = speech.shape[0]
+        res = [beam_results[i][0][:out_lens[i][0]] for i in range(batch_size)]
+        return res

@@ -44,7 +44,7 @@ print(f'Saving logs and output to exp/{SAVE_DIR}')
 logger = create_logger('train ctc with lifters', f'exp/{SAVE_DIR}/{args.action}_{args.start_epoch}.log')
 logger.info(" ".join(sys.argv))  # save entire command for reproduction
 
-VOCAB_SIZE = NUM_CLASSES + 2  # num classes + <blank> + <sos/eos>
+VOCAB_SIZE = NUM_CLASSES + 1  # num classes + <blank>
 
 
 def _create_loader(text: str, wavscp: str):
@@ -78,7 +78,7 @@ if start_epoch != 0:
 
 def step(batch: Tuple) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     x, y, y_lengths = batch
-    y_pred, pred_lengths = model(x)
+    y_pred, pred_lengths = model(x.cuda())
     return x, y, y_pred, pred_lengths, y_lengths
 
 
@@ -111,46 +111,47 @@ def train():
 
         save_checkpoint(f'exp/{SAVE_DIR}', epoch, model, optimizer, scheduler)
 
-        # FIXME:
-        # acc_val = validate(test_loader)
+        ter = validate(test_loader)
         logger.info(
-            '\nEpoch %d\tLoss %.4f\tlr %f\tVal Acc %3.3f\n'
-            % (epoch, losses.avg, get_lr(optimizer), -1000.0)
+            '\nEpoch %d\tLoss %.4f\tlr %f\tTER %3.3f\n'
+            % (epoch, losses.avg, get_lr(optimizer), ter)
         )
 
         scheduler.step(losses.avg)
 
 
-def infer(dataloader: DataLoader) -> Tuple[np.ndarray, np.ndarray]:
+def infer(dataloader: DataLoader) -> Tuple[list, list]:
     model.eval()
 
     ys = []
     preds = []
     with torch.no_grad():
         for j, batch in enumerate(dataloader):
-            _, y, y_pred, pred_lengths, y_lengths = step(batch)
-            y = y.cpu()
-            y_pred = y_pred.cpu()
-            ys.append(y)
-            preds.append(torch.argmax(y_pred, dim=-1))
+            x, y, y_lengths = batch
 
-    ys = torch.cat(ys).numpy()
-    preds = torch.cat(preds).numpy()
+            y = y.detach().cpu().numpy().tolist()
+            labels = [tones[:y_lengths[i]] for i, tones in enumerate(y)]
+
+            y_pred = model.module.predict(x.cuda())
+
+            ys += labels
+            preds += y_pred
+
     return ys, preds
 
 
 def validate(dataloader: DataLoader) -> float:
+    from train.wer import wer_details_for_batch, wer_summary
+
     ys, preds = infer(dataloader)
+    assert len(ys) == len(preds)
 
-    acc = accuracy_score(ys, preds)
-    logger.info(f'Accuracy: {acc}')
+    utts = [f'{i}' for i in range(len(ys))]
+    res = wer_details_for_batch(utts, ys, preds)
+    ter = wer_summary(res)['WER']
 
-    confusion = confusion_matrix(ys, preds)
-    logger.info(f'\n{confusion}')
-
-    report = classification_report(ys, preds, digits=4)
-    logger.info(f'\n{report}')
-    return acc
+    logger.info(f'TER: {ter}')
+    return ter
 
 
 if __name__ == '__main__':
