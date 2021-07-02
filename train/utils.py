@@ -1,4 +1,5 @@
 import os
+import math
 import sys
 import torch
 import logging
@@ -154,3 +155,14 @@ if __name__ == '__main__':
     )
 
     assert masked_accuracy(y_pred, y, ~mask) == 5 / 6
+
+
+def log_add(args: List) -> float:
+    """
+    Stable log add
+    """
+    if all(a == -float('inf') for a in args):
+        return -float('inf')
+    a_max = max(args)
+    lsp = math.log(sum(math.exp(a - a_max) for a in args))
+    return a_max + lsp
