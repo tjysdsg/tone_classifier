@@ -94,7 +94,11 @@ def cepstrum(signal, samplerate=16000, winlen=0.025, winstep=0.01, nfft=512, pre
 
 if __name__ == '__main__':
     import librosa
+    from matplotlib import pyplot as plt
 
     waveform, sample_rate = librosa.load('test.wav')
     mat = cepstrum(waveform, samplerate=sample_rate)
     print(mat.shape)
+    plt.imshow(mat.T, cmap='magma')
+    plt.colorbar()
+    plt.show()
