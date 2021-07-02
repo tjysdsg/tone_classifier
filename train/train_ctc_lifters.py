@@ -25,6 +25,7 @@ parser.add_argument('-b', '--batch_size', default=32, type=int)
 
 parser.add_argument('--train-dir', type=str)
 parser.add_argument('--test-dir', type=str)
+parser.add_argument('--vocab-size', type=int, default=-1)
 
 parser.add_argument('--lr', default=0.001, type=float)
 parser.add_argument('--lr-patience', default=1, type=int)
@@ -44,7 +45,7 @@ print(f'Saving logs and output to exp/{SAVE_DIR}')
 logger = create_logger('train ctc with lifters', f'exp/{SAVE_DIR}/{args.action}_{args.start_epoch}.log')
 logger.info(" ".join(sys.argv))  # save entire command for reproduction
 
-VOCAB_SIZE = NUM_CLASSES + 1  # num classes + <blank>
+VOCAB_SIZE = args.vocab_size if args.vocab_size > 0 else NUM_CLASSES + 1  # num classes + <blank>
 
 
 def _create_loader(text: str, wavscp: str):

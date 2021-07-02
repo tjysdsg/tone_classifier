@@ -173,7 +173,7 @@ if [ ${stage} -le 5 ] && [ ${stop_stage} -ge 5 ]; then
             --config $dir/train.yaml \
             --test_data $feat_dir/test/format.data \
             --checkpoint $decode_checkpoint \
-            --beam_size 10 \
+            --beam_size 5 \
             --batch_size 1 \
             --penalty 0.0 \
             --dict $dict \
