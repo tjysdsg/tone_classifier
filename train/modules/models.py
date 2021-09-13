@@ -113,19 +113,22 @@ class BLSTMStatsPool(nn.Module):
 class EmbeddingModel(nn.Module):
     def __init__(
             self, model: nn.Module, embedding_size: int, num_classes: int, hidden_size=128, include_segment_feats=False,
-            context_size=0, include_spk=False,
+            use_syllable_embedding=True, context_size=0, include_spk=False,
     ):
         super().__init__()
         self.include_segment_feats = include_segment_feats
         self.context_size = context_size
         self.include_spk = include_spk
+        self.use_syllable_embedding = use_syllable_embedding
         size_multiplier = 1 + 2 * self.context_size
 
         self.model1 = model
 
+        syllable_embedding_size = N_PHONES if use_syllable_embedding else 0
+
         seg_feat_size = 0
         if self.include_segment_feats:
-            seg_feat_size += 1 + N_PHONES
+            seg_feat_size += 1 + syllable_embedding_size
 
         seg_feat_size *= size_multiplier
         if seg_feat_size > 0:
@@ -152,7 +155,8 @@ class EmbeddingModel(nn.Module):
         if self.include_segment_feats:
             assert durs is not None and onehots is not None
             extra_feats.append(durs)
-            extra_feats.append(onehots)
+            if self.use_syllable_embedding:
+                extra_feats.append(onehots)
 
         if len(extra_feats) > 0:
             x1 = torch.hstack(extra_feats)

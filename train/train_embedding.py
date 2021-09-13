@@ -31,6 +31,7 @@ parser.add_argument('--test_data_name', default='test', type=str)
 
 parser.add_argument('--use_attention', default=False, action='store_true')
 
+parser.add_argument('--use-syllable-embedding', type=bool, default=True)
 parser.add_argument('--include_segment_feats', default=False, action='store_true')
 parser.add_argument('--include_spk', default=False, action='store_true')
 parser.add_argument('--context_size', default=0, type=int)
@@ -102,7 +103,7 @@ else:
 
 model = EmbeddingModel(
     inner_model, EMBD_DIM, NUM_CLASSES, include_segment_feats=INCLUDE_SEGMENT_FEATS, context_size=CONTEXT_SIZE,
-    include_spk=INCLUDE_SPK,
+    include_spk=INCLUDE_SPK, use_syllable_embedding=args.use_syllable_embedding,
 ).cuda()
 
 # criterion, optimizer, scheduler
