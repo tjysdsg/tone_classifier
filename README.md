@@ -16,6 +16,8 @@ to collect required statistics (phone start time, duration, tones, etc). Results
 
 to split train, test, and validation dataset for embedding model training
 
+The test utterances used in the paper are listed in [test_utts.json](test_utts.json)
+
 4. Run
 
 ```bash
@@ -35,7 +37,3 @@ After step 3,
 ```bash
 ./run.sh
 ```
-
-## [Optional] Reproduce "Tone Recognition Using Lifters and CTC"
-
-TODO
